@@ -1,5 +1,28 @@
 import { test, expect } from '@playwright/test';
-import { csrfHeaders, signIn } from './browser-auth';
+import { csrfHeaders, customerPassword, staffPassword, signIn } from './browser-auth';
+
+for (const account of [
+  { name: 'customer', route: '/sign-in', endpoint: '/api/v1/auth/login', email: 'alice@keywise.test', password: customerPassword, button: 'Sign in', destination: '/dashboard' },
+  { name: 'staff', route: '/staff/sign-in', endpoint: '/api/v1/auth/staff-login', email: 'admin@keywise.test', password: staffPassword, button: 'Staff sign in', destination: '/staff' },
+]) {
+  test(`${account.name} sign-in explains a gateway outage and succeeds when the connection returns`, async ({ page }) => {
+    const endpoint = `**${account.endpoint}`;
+    await page.route(endpoint, route => route.fulfill({ status: 502, contentType: 'text/html', body: '<h1>Bad Gateway</h1>' }));
+    await page.goto(account.route);
+    await page.getByLabel('Email address', { exact: true }).fill(account.email);
+    await page.getByLabel('Password', { exact: true }).fill(account.password);
+    const submit = page.getByRole('button', { name: account.button, exact: true });
+    await submit.click();
+    await expect(page.getByRole('alert')).toHaveText('Keywise is temporarily unavailable. Please try again in a moment.');
+    await expect(page).toHaveURL(new RegExp(`${account.route}$`));
+    await expect(submit).toBeEnabled();
+    await page.unroute(endpoint);
+    await submit.click();
+    await expect(page).toHaveURL(new RegExp(`${account.destination}$`));
+    if (account.name === 'customer') await expect(page.locator('.result-card')).toHaveCount(24);
+    else await expect(page.locator('#admin').getByRole('heading', { name: 'Spending stop', exact: true })).toBeVisible();
+  });
+}
 
 test('expired session returns to customer sign-in while the public website remains accessible', async ({ page }) => {
   await signIn(page, 'alice');

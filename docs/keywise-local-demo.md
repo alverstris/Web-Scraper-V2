@@ -41,6 +41,14 @@ npm.cmd run dev:web
 
 On macOS/Linux, use `npm run dev:web`. Open `http://127.0.0.1:5173/` after Vite reports that it is ready. Both terminals must remain open; Ctrl+C stops each service. Stop both before switching back to the combined command so the ports are available. If the API exits or reports an error, preserve its complete output to diagnose the failure; do not delete saved data as a startup workaround.
 
+If public pages load but both customer and staff sign-in fail with a gateway/connection error, the website may still be running while the API has stopped. Pressing Ctrl+C in the API terminal stops sign-in and dashboard access. Restart `node --import tsx server/main.ts`, wait for `api_listening`, keep that terminal running, and retry sign-in. In another PowerShell terminal, check API readiness with this exact command:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8787/health
+```
+
+The expected result has `ok` set to `True` and `mode` set to `demo`. If the command cannot connect, inspect the API terminal for an exit or startup error. If the API is healthy but sign-in still fails, preserve the website terminal's proxy error as well. Restarting these services keeps your saved local listings and accounts.
+
 ## Mock sign-in accounts
 
 These are deliberately published local test credentials, not production secrets. Use the customer sign-in at `/sign-in` for the customer accounts. All customer passwords are **`Keywise-Demo-2026!`**.
