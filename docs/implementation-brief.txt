@@ -1,0 +1,634 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Commute-first property search — AI implementation brief
+
+COMMUTE-FIRST PROPERTY SEARCH  /  IMPLEMENTATION BRIEF
+Commute-first property search
+AI implementation brief · Version 1.0 · 30 September 2026
+Document purpose: give an AI development chat a self-contained specification for building the software. This is not a business plan, a pricing proposal, or evidence that the product has already been implemented.
+The product decisions below come from the project conversation. Provider facts are separately identified and cited to official documentation checked on 30 September 2026. Proposed engineering defaults are explicitly labelled. Unresolved decisions must not be silently converted into promises or production behaviour.
+1. Instructions to the implementing AI
+1.1 How to interpret this document
+Treat requirements labelled REQUIREMENT as the agreed product behaviour. Treat DEFAULT as a recommended implementation choice, not a newly approved business rule. Treat GATE as a condition that must be resolved before the affected feature can run with live data or be presented as production-ready. Treat LATER as extension scope: preserve a clean integration point, but do not build an entire speculative subsystem.
+Where provider capabilities or contracts conflict with a requirement, preserve the product intent and report the conflict. Do not secretly weaken the feature, invent provider support, substitute fabricated data, or turn a blocked integration into a permanently mocked feature. Other, independent work can continue using clearly labelled synthetic fixtures.
+Do not treat every option mentioned in earlier discussion as a commitment. This brief intentionally excludes revenue forecasts, hosting price comparisons, advertising rates, commission rates, subscription prices, automatic AI-crawler monetisation, speculative market-data sales, and an exhaustive collection of animation libraries.
+1.2 Non-negotiable product rules
+	ID
+	Requirement
+
+	P01
+	Search is commute-first: calculate journey results, then let users explore housing trade-offs.
+
+	P02
+	Ordinary property filters, including rent, bedrooms and furnishing, normally operate on the completed or progressively delivered result dataset. They must not silently restrict the standard routing run.
+
+	P03
+	Destination, supported transport preferences and journey-time assumptions are selected before a new routing run. Editing draft settings never automatically starts a chargeable calculation.
+
+	P04
+	Custom runs produce individual temporary result datasets. Do not find, match, reuse or promote another user's custom dataset, even for an identical destination. Do not merge nearby destinations.
+
+	P05
+	Popular destinations are deliberately shared, maintained datasets with explicit destination points and supported routing profiles. Their live storage/precomputation is subject to the licensing gate in section 3.
+
+	P06
+	Users should be able to export a portable result snapshot and later reopen it without recalculating routes. Preserve this requirement, but do not enable live export until the relevant data rights are established.
+
+	P07
+	Authentication and duplicate-free-allowance prevention are separate responsibilities. A new Google or Microsoft login is not automatically a new free entitlement.
+
+	P08
+	Ads must be non-intrusive. Partner payments must not alter organic commute ranking or disguise sponsored content as ordinary results.
+
+	P09
+	Distinctive design and meaningful animation are core quality requirements, not a cosmetic phase that can be omitted from the finished product.
+
+	P10
+	Listing facts, route availability, geographic precision, calculation times and incomplete results must be represented honestly. Unknown is not false or zero.
+
+
+
+2. Product scope and vocabulary
+2.1 What the service does
+Collect current property listings from supported, authorised sources. Resolve their locations and structure their useful attributes. Let visitors browse maintained commute results for popular destinations, or let eligible users request a custom commute calculation. Present properties primarily by journey duration, with map/list interaction and flexible property filters. Send users to the original provider to view or apply for a property.
+Initial context: Swiss rentals, particularly university destinations such as EPFL and UNIL. These are examples and launch context, not permission to hard-code one campus, one language or nationwide coverage. Use configurable markets, providers and destinations. Do not claim to cover all available Swiss housing.
+2.2 Terms used throughout
+A listing is an individual advertisement from a source. A property is the physical accommodation; multiple listings may describe it. An origin is the listing's best-supported location. A destination is the specific place the user needs to reach, not an interchangeable postcode centroid.
+A route definition contains the destination, travel mode, supported preferences, direction and time assumptions. A listing universe is the fixed set of eligible listing versions selected for a run. A result dataset contains that universe's listing information and calculated route results. A view is the user's current filters, sorting, map position and selection over a dataset.
+A custom run is one explicitly requested computation. A popular profile is a named, maintained route definition for a popular destination. A portable search file is an exported snapshot; it is not a request to search again and is not a source of account privileges.
+Use “commute settings”, “property filters” and “search results” in the interface. Use “result dataset” rather than “cache” in implementation documentation where that avoids implying shared cache-matching logic.
+2.3 Standard versus focused search
+REQUIREMENT: a standard run covers all active, eligible listings in the clearly stated supported market or service area. Rent, bedrooms, furnishing and the user's current map viewport do not silently narrow it. The default sort is shortest calculated commute; ascending and descending commute sorting are available.
+LATER: a focused search may voluntarily limit the listing universe before routing, for example by rent or geographic area. Its narrower coverage must be disclosed before the run and remain visible afterwards. Relaxing a limit beyond that universe requires a new explicit run. Do not make focused search the default, or invent a discount or credit multiplier.
+3. Provider constraints and production gates
+This section is an external technical check, not a revision of the product intent. Earlier conversation examples were conceptual; they did not establish licensing permission or exact API support.
+3.1 GATE: Google data storage and portable export
+Google's general Maps terms restrict caching except where expressly allowed, and restrict exporting Maps content. Routes-specific terms include a limited latitude/longitude caching allowance; that is not blanket permission to retain journey-duration databases. Place IDs have a separate storage exception. These provisions do not establish permission for this project's maintained shared commute datasets or indefinitely reusable downloaded route files. [S1, S2, S3]
+Before live enablement, establish permission for popular-route precomputation, server retention, user downloads, later imports, and any saved route geometry. Record the applicable agreement and billing-region terms. Obtain written permission where necessary, or propose a routing/data source whose licence supports the required product. The owner must approve a change of provider or feature scope.
+Build the portable-file contract and popular-dataset workflow against synthetic data meanwhile. Do not claim that moving data into a browser, JSON file or compressed object bypasses provider restrictions. Even temporary server retention needs an applicable permission; a short expiry alone does not establish one.
+3.2 GATE: location and map rights
+Keep independently supplied listing addresses/coordinates distinguishable from Google-derived data. Do not assume every geocoded coordinate can be saved indefinitely in the shared listings database. Evaluate the specific source and retention rights. Google's current Geocoding terms contain conditional exceptions; they are not an unrestricted licence for a shared geocoding warehouse. [S2, S4]
+DEFAULT: use Google Maps when displaying Google Routes results geographically. Google documents map-provider and attribution requirements; reserve visible attribution space in cards, maps and route views. Do not replace the map with Mapbox or another map while continuing to overlay Google route data without checking the applicable agreement. A map-free list also needs the required attribution. [S3]
+3.3 GATE: authorised listing supply
+No provider or feed agreement has been selected. A provider connector must record permitted retrieval methods, attribution, image use, description processing, storage and export permissions. A public listing page is not itself a data-feed agreement. Do not build anti-bot circumvention as an assumed acquisition method.
+Require at least one authorised live source before claiming live-market readiness. Maintain a permission-controlled synthetic provider for development, clearly separated from production. Dataset export must consider listing/image rights as well as routing rights.
+3.4 GATE: advertised route controls
+Expose only controls with a verified implementation. Google's transit API supports a preference for less walking or fewer transfers; these occupy one routing-preference field, not two simultaneously guaranteed optimisations. Transit mode preferences can still return other modes. There is no generic “less cycling” switch or guaranteed “never use a tram” promise established by those fields. [S5, S6]
+Retain the desired user experience, but classify each control as supported directly, supported through an explicitly designed extra computation, or unavailable. Never send invented parameters or accept a setting that the backend silently ignores. Section 6 specifies the behaviour.
+4. Hosting and application layout
+4.1 Selected hosting direction
+REQUIREMENT: use the Cloudflare frontend plus Google/Firebase backend direction agreed in the conversation. It must support a rich, animated web application rather than force a site-builder template.
+	Responsibility
+	Platform / implementation direction
+
+	Website delivery
+	Cloudflare Workers Static Assets.
+
+	Frontend application
+	React, Vite and TypeScript are the recommended starting stack.
+
+	DNS, TLS, edge protection
+	Cloudflare; configure crawler controls and appropriate request protection.
+
+	Lightweight edge handling
+	A small Worker for routing/proxying and limited request checks where useful.
+
+	Application API
+	Google Cloud Run, with server-authoritative authorisation and quota checks.
+
+	Scheduled ingestion
+	Cloud Scheduler invoking Cloud Run Jobs.
+
+	Background routing
+	DEFAULT: Cloud Tasks dispatches bounded batches to a Cloud Run worker.
+
+	Authentication
+	Firebase Authentication; entitlement rules remain application-owned.
+
+	Structured records
+	Firestore initially, behind repository interfaces.
+
+	Larger result payloads
+	DEFAULT: private Google Cloud Storage objects, with a manifest in Firestore, where storage rights allow.
+
+	Secrets and operations
+	Managed secrets, restricted service accounts, structured logging and monitoring.
+
+
+
+Cloudflare officially supports a React/Vite application with static assets and Worker logic. Cloud Scheduler can execute Cloud Run Jobs, and Cloud Tasks supports authenticated HTTP worker delivery. These services suit the selected responsibility split; they are not evidence that this particular application has been deployed. [S7, S8, S9]
+4.2 Request and job flow
+Browser: React application
+  |
+  +-- Cloudflare: site assets, edge checks, API proxy
+  |     |
+  |     +-- Cloud Run API
+  |           +-- Firebase token verification
+  |           +-- Firestore: listings, accounts, runs, configuration
+  |           +-- Cloud Tasks --> private routing worker
+  |           |                    +-- location/routing providers
+  |           |                    +-- permitted result storage
+  |           +-- authorised result delivery
+  |
+  +-- Firebase Authentication: sign-in and verification
+  +-- map SDK: separately restricted browser credentials
+
+Cloud Scheduler --> Cloud Run Jobs --> listing ingestion
+                                    --> popular-data maintenance
+                                    --> cleanup/reconciliation
+
+This is a logical separation, not a request for dozens of microservices. DEFAULT: one repository, one application API, one worker deployment and one ingestion job, sharing domain code where appropriate. Keep the edge Worker small; it is not the routing engine or the source of truth for account allowance.
+Use an explicit API path such as /api/v1/. A SPA fallback must not turn missing API endpoints into successful HTML responses. Separate immutable asset caching from API responses. Private run responses must not enter a shared CDN cache; use appropriate private/no-store headers and verify that the proxy honours them.
+4.3 Trust boundary and deployment safety
+Cloud Run must verify Firebase identity tokens itself before protected work. A browser-supplied user ID or a Cloudflare challenge success indicator is not account authorisation. Firebase's documented pattern is to verify the ID token on the custom backend and use its authenticated user identifier. [S10]
+Prevent bypass of edge protections: use an authenticated edge-to-origin path or an equivalently reviewed origin-access arrangement, and retain application-level abuse controls even if a request reaches the origin directly. Worker-to-API credentials and user identity credentials are separate. Internal task endpoints require service authentication and must not be exposed as anonymous public job starters.
+Maintain development, staging and production environments with separate data and secrets. Preview deployments must not consume production routing quotas, send live SMS, publish real ads, charge payments or ingest live sources by default. Pin dependency versions when implementation begins; this document does not prescribe guessed current versions.
+5. Listing ingestion and normalisation
+5.1 Daily source processing
+REQUIREMENT: run ingestion at a configured daily time. Store schedule timezone explicitly. The job must be safe to retry and must not overlap an unfinished run for the same provider without a deliberate concurrency design.
+For each provider: fetch all authorised pages or incremental changes, record whether the fetch was complete, validate records, and upsert by (source_id, source_listing_id). Compare relevant content versions to distinguish new, unchanged and updated records. Mark listings inactive only using successful feed reconciliation or an explicit source removal signal. A failed or incomplete provider fetch must not mass-remove its listings.
+Store first-seen, last-seen, source-update and ingestion timestamps separately. Avoid rewriting every unchanged record. Do not re-run address resolution or description extraction when the relevant input is unchanged, except where provider retention/refresh obligations require it.
+Cross-provider duplicates are not postcode matches. DEFAULT: keep source listings distinct and add a conservative property-grouping layer later. Never collapse different apartments in one building solely because their address matches. Retain original provider links even if a future UI groups duplicate advertisements.
+5.2 Location handling
+Prefer authorised structured coordinates from the listing provider. Otherwise use the configured location resolver to interpret the address, locality, postcode and country. This is address/place disambiguation; routing calculates the journey after a location is resolved.
+Retain provenance and precision: exact address, approximate building, street, postcode/locality, unresolved. Where a source intentionally hides the address, do not fabricate a precise building. Either display an explicitly approximate commute or exclude it from exact-commute ranking with a visible explanation; choose and document that launch policy.
+For a custom destination, present plausible matches with enough address context and a map selection/confirmation where needed. Confirm the intended destination point or entrance. Never substitute the centre of a nearby place because the map distance is small. Aliases for the same verified place may share a suggestion record, but that is not permission to share custom route results.
+5.3 Listing attributes and extraction
+Normalise price, currency, rent period, known additional charges, property type, floor area, rooms, bedrooms, bathrooms, furnishing and facilities. Preserve provider terminology where meanings differ. In particular, do not translate a source's “2.5 rooms” into “2.5 bedrooms”. Keep rooms and bedrooms separate; unknown bedrooms remain unknown.
+Facilities include washing machine, dryer, kitchen, dishwasher, air conditioning, balcony and parking where supported. Record private/shared/not stated distinctions when the source supports them. A shared laundry room is not a verified private washing machine.
+Use structured source fields first. DEFAULT: deterministic parsing next, with an LLM only for authorised unstructured descriptions that need interpretation. Extract on ingestion or relevant content change, never during ordinary result filtering. Preserve evidence text or source-field references and extraction version. Unsupported or conflicting claims become unknown/review-needed rather than invented certainty.
+Treat descriptions as untrusted input, not instructions to the LLM. Use a constrained output schema and field validation. Do not give the extractor tools that can change entitlements, start route runs, fetch arbitrary URLs or alter application configuration.
+5.4 Publishing a usable listing version
+A listing version can be routable, approximate-only, unresolved or inactive. Record that state independently of extraction completion. One failed facility extraction must not delete an otherwise usable listing. A location change affects future routing origins; a rent-only change does not change the geometry of a journey.
+Expose a stable listing ID, source URL and version to run creation. A run freezes its candidate IDs/versions so ingestion during calculation cannot silently change the dataset's coverage or rent values halfway through.
+6. Commute calculation contract
+6.1 Route definition versus view controls
+The route definition includes the confirmed destination, origin versions, travel mode, supported transit preferences, journey direction, explicit departure or arrival assumptions, and routing-adapter version. DEFAULT direction: listing to destination. A return trip is a separate calculation unless a future approved feature explicitly includes both.
+Property filters operate over the dataset: rent, rooms/bedrooms, bathrooms, furnishing, facilities, floor area, property type and geographic zones. Result filters include maximum calculated commute. Sorting may include commute, rent and any other measured field available across the relevant results. None of these view operations initiates routing.
+Changing commute settings creates a draft for a new run. Keep the current result header fixed to the definition that produced it; do not relabel old durations with the new destination or preference. The user explicitly requests the next run and sees its allowance implications first.
+6.2 Supported modes and preferences
+	Desired control
+	Implementation rule
+
+	Walk, cycle, drive, public transport
+	Expose the modes actually supported by the active provider and region. Do not treat motorised two-wheelers as bicycles.
+
+	Less walking
+	Map to the supported transit preference; explain that it is a preference, not a guaranteed walking-time maximum.
+
+	Fewer transfers
+	Use the supported preference; do not promise simultaneous optimisation with less walking without an approved strategy.
+
+	Less tram / preferred transit types
+	Expose only a truthful provider-backed preference. A mode list is not proof that all other modes are excluded.
+
+	No cycling
+	Do not request cycling as an eligible journey mode. Do not imply a built-in cycle-plus-transit planner where none has been implemented.
+
+	Hard maximum walking / excluded transit mode
+	Requires sufficient route details and explicit checking; otherwise unavailable. A rejected returned route does not prove no compliant route exists.
+
+	Least-walking sorting
+	Available only when actual walking measures exist for the compared candidates; it ranks measured results, not every theoretically possible journey.
+
+
+
+The provider capability mapping must be machine-readable and tested. Store requested preferences and any provider fallback/warnings separately. Do not present fallback results as full compliance with a hard requirement. Google's documented transit controls and their limitations are the starting reference, not a substitute for live integration tests. [S5, S6]
+6.3 Matrix and detailed route requests
+DEFAULT: use Compute Route Matrix for bulk duration/distance work where its available fields meet the profile. Use Compute Routes when the required information includes detailed steps, geometry, transfers or walking breakdown. Do not fabricate those details from a matrix duration. If a feature requires details for every candidate, include that work in the run instead of discovering later that only the opened cards can be sorted correctly.
+The current matrix reference includes transit preferences, origin/destination indices, status and condition fields. It limits transit matrices to 100 origin–destination elements and separately limits address/place-ID waypoint counts. Respect both limits; splitting one logical run into batches does not make each element free or interchangeable. [S11]
+Select explicit response fields. Handle out-of-order responses using their origin/destination indices, not response arrival position. A route-not-found response, a provider error and an unresolved address are distinct states. Never store any of them as a zero-minute commute.
+Route alternatives are optional, not a priority subsystem. If returned, use a documented deterministic selection rule consistent with the profile and requested sorting. Do not add LLM calls to choose ordinary routes. Do not assume the provider has returned an exhaustive set of alternatives.
+6.4 Time semantics and freshness
+GATE: choose the launch time policy. Every run must record the actual date/time/timezone used, including daylight-saving interpretation. Do not let long-running batches accidentally default to different “now” values. A specific Tuesday arrival estimate is not a statistical “typical weekday” average.
+Popular profiles need a visible named time assumption and refresh policy as well as destination/mode. Refresh existing results when the time basis, provider obligations or scheduled freshness policy requires it; updating only newly listed properties forever is insufficient. Show calculation time and the assumed journey time distinctly.
+7. Custom-run execution and allowance
+7.1 Explicit start, bounded execution
+A custom run starts only after the server has checked identity, free entitlement or paid allowance, supported inputs, data permissions, enabled market, workload limits and abuse controls. Validate the input before invoking paid routing.
+The user confirms the destination, route profile, service-area coverage and any voluntary focused restrictions. The server selects and freezes the listing universe. If workload exceeds the supported service capacity, explain the limit before starting. Do not silently route only the first N listings, only cheap properties, or only those visible on the map.
+DEFAULT execution: reserve allowance and create a durable run manifest, then dispatch bounded worker batches. Return a run ID promptly and use polling or another documented progress channel. A routing calculation must not rely on keeping one browser HTTP request open for the entire job.
+7.2 State machine and retry behaviour
+DRAFT (browser only)
+  -> VALIDATING
+  -> QUEUED
+  -> RUNNING
+  -> COMPLETE | PARTIAL | FAILED | CANCELLED
+
+Stored result access later becomes EXPIRED or DELETED.
+Expiry is separate from the recorded computation outcome.
+
+DEFAULT: attach an idempotency key to run creation, scoped to the authenticated entitlement and this explicit submission. Repeating the same submission after a timeout returns its existing run; it must not debit allowance or dispatch the same work twice. This protects one request from retries. It is not destination matching or cross-user dataset reuse.
+Atomically reserve available allowance. Use deterministic batch IDs, bounded retries, durable per-batch outcomes and lease/claim handling for workers. Resume unfinished work rather than recalculating successful batches indiscriminately. Count actual external work separately from logical run count.
+DEFAULT accounting proposal: reserve at acceptance; release if validation/dispatch fails before external work; finalise at most one allowance entry after work begins. Partial failures, cancellation and operator credits need an explicit launch policy. Do not grant unlimited fresh reruns whenever one provider call fails. Expose outcome and any allowance adjustment clearly.
+7.3 Daily quotas without pricing assumptions
+The initial product example was two custom runs per day for up to two different destinations. Keep allowances and distinct-destination limits configurable, not embedded in UI logic. A second profile at the same destination is still another computation and therefore another run unless an approved plan says otherwise.
+DEFAULT reset timezone: Europe/Zurich for the Swiss launch. Store the policy timezone and day key server-side; client clocks do not grant allowance. Separate run limits from destination limits. Destination counting within one entitlement/day is quota bookkeeping only, never a lookup of someone else's results.
+Represent plans as entitlement configuration. Do not implement prices, payment-provider products, discounts or paid-plan names from examples in the conversation. Real checkout is LATER until commercial decisions and payment integration are approved.
+7.4 Progress and honest completeness
+Expose total candidates, completed route attempts, successful routes, no-route results, unresolved origins and failed attempts. Show partial progress without claiming that the currently visible list is the final fastest set. Results may reorder as shorter journeys arrive; preserve the selected card and avoid disruptive jumps under the pointer.
+Provide a cancel control that stops undispatched work where possible and reports what already ran. A tab closing need not immediately stop durable execution, but it must not cause unbounded work or permanent result retention. A short, private recovery reference may resume the same owner's run within its permitted lifetime.
+8. Result datasets, storage and portable files
+8.1 Three separate storage purposes
+Keep a central authorised listing database; maintain shared popular datasets where permitted; keep each custom dataset private and temporary. No custom destination history index, fuzzy-location matching, shared request-result lookup or automatic popularity discovery from private runs is required.
+A result dataset is an immutable record of one computation. Property filters change the view, not the dataset. New commute settings create a new run rather than mutating or “invalidating” the old run. Storage expiry, file-format checks and permission checks remain necessary, but there is no custom cache-suitability engine.
+8.2 Concrete storage default
+DEFAULT: Firestore stores manifests, ownership, run status, counters, listing records and configuration. Larger immutable result chunks live in private object storage, referenced by a manifest. Do not put an entire large market snapshot in a single Firestore document: the documented document size limit is 1 MiB. [S12]
+Use compact result rows and lazy image loading. For ordinary launch-sized datasets, download the compact rows and filter/sort in a browser worker. For larger supported universes, use an indexed per-run query mechanism or an explicitly bounded supported size. Filtering only the currently loaded page is not correct dataset-wide filtering. No database change may silently narrow standard search coverage.
+8.3 Temporary lifecycle
+GATE: choose the permitted dataset lifetime after provider-rights review. Record created_at, expires_at and ownership. At expiry, the API must deny new access regardless of when physical deletion finishes. Cleanup covers chunks, manifests, partial outputs and any derived copies. Keep only minimal, separately retained accounting/security records where justified.
+Do not rely on a browser-close event as the only deletion mechanism. An explicit discard action can request earlier removal. Do not introduce browser-persistent result history, offline service-worker caches or automatic long-term local storage by default.
+Firestore TTL deletion is asynchronous and does not automatically delete subcollections. Use access-time expiry checks and explicit cleanup design; do not promise exact physical deletion at the TTL timestamp. [S13]
+8.4 Portable search format
+REQUIREMENT, subject to section 3: export sufficient listing data and route results to reopen the same dataset later without calling the routing API. Export the dataset, not just the visible page or current rent-filter subset. A saved view may be included as optional metadata.
+Use a versioned data-only format. Include format identifier, schema version, creation/calculation time, journey assumptions, destination label/location as permitted, requested/effective preferences, market coverage, focused restrictions if any, completeness counts, listing snapshots, route rows and required provenance/attribution. State clearly whether the payload is synthetic, live or imported.
+Exclude tokens, verification evidence, email/phone identifiers, secrets, private run-access links, entitlement counters, partner billing credentials and tracking identifiers. Do not embed arbitrary scripts, executable markup, remote-fetch instructions or full image binaries by default.
+DEFAULT import: parse locally in a browser worker; do not upload the file to the server merely to restore it. Validate version, field types, ranges, number of rows, compressed and expanded size, nesting depth, URLs and cross-record references. Unknown versions must produce a readable compatibility error. Never execute file contents or trust imported figures as commercial/analytics evidence.
+The reopened view must show the original calculation date and assumptions and label results as a saved snapshot, not live availability. External image requests and map SDK use may still need a network connection; “no rerouting” does not mean “fully offline”. The file cannot alter a user's plan or grant free runs.
+LATER: optional user-requested listing-status refresh can label current availability or price changes using authorised listing data. Keep it separate from the saved snapshot and from any new route calculation. It must not run silently on import.
+9. Popular destinations and suggestions
+9.1 Maintained public datasets
+A popular destination contains a human-readable name, confirmed point/entrance, locality, supported market, routing profiles, publication state and provenance. A campus name does not automatically describe every entrance or building.
+A popular profile identifies one supported route definition, including time basis. The user chooses an available profile and loads its published results without starting a new custom run. If the desired settings are not precomputed, say so and offer the explicit custom-run path; do not relabel an existing profile.
+The maintenance job adds new routable listings, handles location changes, updates listing information, excludes inactive listings, and refreshes journeys according to the profile's time/freshness policy and permitted retention. Publish a coherent version rather than exposing half-written files. Show coverage and last calculation time.
+A popular page may be available without a verified custom-search account. Public access does not mean that the unrestricted internal source database must be downloadable. Only permitted public result payloads may be cached at the edge.
+9.2 Questionnaire and administrative promotion
+REQUIREMENT: provide “Suggest a popular destination”. Collect the intended place, enough address/map context to identify it, and optional location type and expected usage. Keep the form short. Ask no unnecessary phone number merely to vote unless the selected abuse policy requires verification.
+Deduplicate nominations for the same verified destination using an exact source identifier plus intended point/context. Do not merge different campus entrances or nearby sites just to aggregate votes. Count unique eligible requests, rate-limit submissions, and keep an admin review queue.
+Admins approve the location, destination point, profile set and service coverage. There is no automatic promotion threshold and no mining of private custom-run destinations. A suggestion does not itself launch expensive route precomputation.
+10. Authentication and duplicate-allowance protection
+10.1 Identity model
+Firebase Authentication handles sign-in and linked login providers. Application records associate the authenticated user with a free entitlement or paid allowance. Protected API actions derive identity from a verified token, not supplied form fields. [S10]
+A login proves control of an account; it does not establish one human per free allowance. The original proposal used email plus phone verification. Institutional verification as an alternative was discussed later. The exact launch eligibility policy remains a GATE, not a proven uniqueness solution.
+Build a separate entitlement record with verified evidence associations and one atomic usage ledger. Linking another login provider must not create another free allowance. Require proof before linking identities; never auto-merge accounts by similar names, shared IP or unverified matching email text.
+10.2 Verification-policy choices
+Support a configurable policy interface. The simplest original policy is verified account plus a verified phone that has not already activated another free entitlement. A supported institutional-identity alternative may be enabled only after deciding how aliases, multiple institutions and a subsequent phone claim are handled.
+An “institution OR phone” scheme does not automatically recognise that both belong to one person. Do not advertise perfect duplicate prevention. Document the residual abuse risk and choose the allowed verification paths deliberately. Phone possession also does not prove a globally unique human.
+Normalise phone numbers consistently. DEFAULT: use a keyed HMAC of the normalised value for uniqueness lookup rather than a plain low-entropy hash. Keep any raw contact details encrypted/restricted where they are actually needed. Treat fingerprints as protected pseudonymous identifiers, not anonymous data. Define recovery, recycled-number disputes and deletion/re-registration behaviour without publishing account ownership details.
+10.3 Layered abuse controls
+Combine entitlement uniqueness with server-side limits, verified requests, Turnstile and risk signals. Shared university/residence IPs must not become an automatic one-person rule. Device signals are not reliable identity and must not be treated as unquestionable proof.
+Validate Turnstile on the server; its tokens are short-lived and single-use. It complements authentication rather than replacing it. [S14] Rate-limit verification sends and retries as well as route runs. Otherwise abuse can move from routing expenditure to SMS or email expenditure.
+Offer a clear recovery/support route for legitimate users denied by the verification policy. Admin overrides require an audit trail and must not be available through ordinary client-side fields.
+11. Interface, design and motion
+11.1 Required screens and states
+Provide a landing/search page; popular-location/profile selection; custom destination selection; verification and allowance states; commute configuration; run confirmation/progress; results with list/map modes; property details and source handoff; portable import/export; popular-location suggestion; and an admin console.
+Design every important state: empty market, no filter matches, unresolved destination, approximate origin, unsupported preference, exhausted allowance, provider outage, partially completed run, expired results, invalid import, missing image, ad unavailable and unauthorised access. Errors must explain the next valid action without silently starting new paid work.
+11.2 Results behaviour
+Keep the destination/profile/time summary visible. Show result count, coverage/completeness, current sort and active property filters. A card includes rent with currency/period, key housing facts, commute duration, uncertainty/freshness where relevant, provider identity and a source-listing action. Do not imply unknown facilities are absent.
+Synchronise card focus with its map marker. Use accessible clustering for dense maps; a selected marker must have a clear corresponding listing. A drawn area is a view filter by default. Map panning alone does not alter the run universe or trigger new routes.
+On mobile, prioritise readable cards and a deliberate list/map switch over cramped simultaneous panels. Preserve filter state and selected listing when changing presentation. Include a non-map way to complete the task.
+11.3 Distinctive visual direction
+REQUIREMENT: establish a coherent design system before declaring the visual product complete. Define typography, colour roles, spacing, surfaces, icons, card hierarchy and motion tokens. The desired identity is the relationship between a home and the place the user needs to reach, not a generic estate portal with decorative effects added later.
+DEFAULT: React/Vite/TypeScript with one primary UI motion approach. Add specialist illustration or 3D libraries only when a specific interaction justifies the dependency. No requirement exists to install Motion, GSAP, Rive, Lottie and Three.js together.
+Useful motion includes destination-to-map focus, clear progression from configuration to results, selection continuity between card and details, filter-driven changes and honest job-progress feedback. Animation must not imply route calculations have completed before they have.
+Do not generate fake continuous commute contours from sparse property-to-destination durations. A contour/isochrone would require its own valid data/model and permissions. A straight origin-to-destination connector is not a navigable route; label it appropriately and do not present it as measured geometry.
+11.4 Motion and accessibility rules
+Interactions remain usable while transitions run. Do not force users to wait for a landing animation, hijack scrolling, autoplay sound, or move a clicked target away. Avoid reanimating all cards on every slider event. Preserve keyboard focus and respect reduced-motion preferences; essential state changes must still be clear without animation. The browser exposes the relevant reduced-motion preference through a media query. [S15]
+Test keyboard use, visible focus, screen-reader labels, contrast, zoom, touch targets and non-colour status cues. Reduced motion is not simply “turn off the interface”. Use restrained or immediate state transitions as appropriate.
+DEFAULT performance acceptance targets: LCP at most 2.5 seconds, INP at most 200 milliseconds and CLS at most 0.1 at the 75th percentile, measured separately for mobile and desktop where real-user data exists. These are Google's published good-experience thresholds, adopted as project targets rather than measured results. [S16]
+Use virtualised lists and browser-worker filtering when needed, reserve image/ad dimensions, lazy-load heavy map/illustration modules, and test actual lower-powered mobile devices. Record lab conditions honestly; do not claim field-performance success from a single desktop Lighthouse run.
+12. Advertising and partner integration
+12.1 Ad behaviour to build
+REQUIREMENT: non-intrusive advertising is a planned revenue channel. Build placement components and configuration hooks into the design, without hard-coding an ad network or commercial rates.
+Provide named slots for a restrained in-results placement and an optional desktop side placement when there is genuinely spare space. Placement frequency and visibility are configurable and require design approval. Reserve layout space or collapse unused space without disruptive movement. Ads must be unmistakably labelled and visually distinct from property cards.
+Prohibit pop-ups, pre-results interstitials, forced ad viewing, autoplay sound, overlays covering maps/filters, accidental-click placement and ads that impersonate ordinary properties. Do not automatically re-request an ad every time a filter changes or run progress updates. Ad-network failure, refusal of optional tracking or an ad blocker must not break search, file import or source navigation.
+Google's ad-placement policies prohibit deceptive/accidental-click designs and impose restrictions on automatic refresh and pre-roll gating. Final network integration must be reviewed against the chosen network's current rules. [S17]
+12.2 Consent, configuration and isolation
+DEFAULT: an AdProvider interface, named slots and a consent-aware loader. Until a network and consent implementation are approved, slots remain disabled in production and use obvious internal preview fixtures in design testing. Do not fabricate live ad inventory.
+For Google personalised ads in the EEA, UK and Switzerland, Google's publisher requirements include a certified consent-management platform integrated with its consent framework. This is an integration constraint if that network/mode is chosen, not a claim that all other ads are consent-free. [S18]
+Keep exact custom destinations, route settings, email, phone and entitlement evidence out of advertising payloads. Do not place private destinations in URLs that leak through referrers. Third-party scripts have access risks; select isolation and privacy controls accordingly. Prefer non-personalised/contextual integration unless a more invasive model is explicitly approved.
+12.3 Estate-agent and portal partnerships
+REQUIREMENT: preserve the original source URL and support partner relationships without changing search truthfulness. A partner may provide an authorised feed and/or receive referred traffic. Model data-supply permission and referral arrangement separately; one does not imply the other.
+DEFAULT first integration: a partner/source record and controlled outbound-link adapter. A click may use a partner-approved referral URL when a real agreement exists; otherwise open the canonical listing URL. Use allowlisted destinations, not an arbitrary open redirect. Tracking failure must never strand the user before the source website.
+Collect only justified, consent-compatible referral events. Attribute by source, listing, campaign and placement as permitted, not by sending a user's destination or verification details. A reopened portable file is not proof of a billable lead or valid campaign attribution.
+LATER: explicit “contact agent” lead forms. Show who receives the information and obtain permission for that transfer. Do not sell or transmit verification contact details merely because the user created an account.
+LATER: clearly labelled sponsored property slots. They may not alter the organic result array, organic result count, commute figures or filters. A sponsored property must genuinely fit the current view and have valid data for the displayed profile; sponsorship must not silently trigger extra routing. Reopened snapshots must not have live sponsored rows inserted as though they were part of the saved dataset.
+12.4 Commercial configuration, not invented prices
+Prepare feature flags and plan/entitlement hooks, but do not invent subscription prices, ad-removal promises, referral commissions, paid listing packages or purchase-tier names. Payment processing and partner billing are not required for the first functional implementation. No speculative B2B analytics marketplace or pay-per-crawl product is included.
+13. Core data contracts
+The structures below define responsibilities and semantics. They are not an instruction to place every field in one database document. Keep identifiers stable, timestamps explicit, units machine-readable and schema versions separate from displayed labels.
+	Entity
+	Required information / responsibility
+
+	Source
+	Source ID, connector type, enabled market, permission record, attribution, canonical host, retrieval health.
+
+	ListingVersion
+	Listing/source IDs, version, source URL, title, location provenance/precision, rent/currency/period, rooms and bedrooms separately, facilities with unknown states, source/ingestion timestamps, active/routable state.
+
+	Destination
+	Entered label where needed, selected label, permitted point/place reference, country/locality, precision and intended entrance/context.
+
+	RouteDefinition
+	Destination, direction, mode, supported preferences, explicit time basis, provider/adapter version, requested versus effective settings.
+
+	Entitlement
+	Owner association, verified-evidence references, eligibility policy, plan configuration, status; no assumption of one provider login per person.
+
+	UsageLedger
+	Entitlement, policy-day key, run ID, reservation/finalisation/release or adjustment, external-work counters, idempotency scope.
+
+	RunManifest
+	Owner, immutable definition, listing-universe version, run state, counts, creation/expiry, private chunk references and error summary.
+
+	RouteRow
+	Listing/version reference, result state, duration in seconds when available, distance if measured, optional measured details, warnings and provenance.
+
+	PopularProfile
+	Approved destination, route definition, coverage, maintenance policy, published dataset version, calculation/publication times.
+
+	DestinationSuggestion
+	Verified destination candidate, requester reference where authorised, optional answers, moderation status and distinct-request count.
+
+	Partner / placement
+	Source relationship, approved link policy, enabled placement types, disclosure text, campaign validity and integration status.
+
+
+
+Route row states must include success, no route returned, unresolved origin, unsupported settings and provider error. Do not use a single nullable number to encode every case. Transfer count, walking duration and polyline must remain absent unless measured/derived by an approved, tested procedure. Total journey duration may include waiting; do not make transport components sum to the total by inventing values.
+13.1 Application-level request shape
+The application contract must be distinct from Google's raw request format. The backend adapter translates only supported fields. This example is schema guidance, not fabricated live data:
+CreateRunRequest
+  idempotency_key: string
+  destination_selection_id: server-validated selection
+  route_definition:
+    direction: HOME_TO_DESTINATION
+    mode: WALK | BICYCLE | DRIVE | TRANSIT
+    transit_preference: DEFAULT | LESS_WALKING | FEWER_TRANSFERS
+    preferred_transit_modes: supported mode list, when applicable
+    time_basis: explicit departure OR arrival specification
+  market_id: configured coverage
+  search_scope: STANDARD | FOCUSED
+  focused_constraints: absent for STANDARD
+  verification_challenge: when required
+
+DEFAULT: keep ViewState separate, containing property filters, commute limit, sorting, map view and selection. It must not be submitted as hidden standard-run constraints. Domain validation rejects unsupported combinations before external work.
+13.2 API surface
+	Route / operation
+	Behaviour
+
+	GET /api/v1/capabilities
+	Enabled markets, route controls and feature availability; no secrets.
+
+	GET /api/v1/popular-destinations
+	Approved destinations and supported published profiles.
+
+	GET /api/v1/popular-profiles/{id}
+	Published manifest/results access, attribution and freshness.
+
+	POST /api/v1/location-selections
+	Validated destination search/selection through the configured resolver; rate-limited.
+
+	GET /api/v1/me/entitlement
+	Server-derived eligibility, remaining allowance and required verification.
+
+	POST /api/v1/entitlement-verifications
+	Start/complete an approved verification flow; bounded retries.
+
+	POST /api/v1/runs
+	Validate, reserve and start one explicit run; return run ID and state.
+
+	GET /api/v1/runs/{id}
+	Owner-authorised status/manifest, subject to expiry.
+
+	GET /api/v1/runs/{id}/results
+	Owner-authorised result delivery/query; never new routing.
+
+	POST /api/v1/runs/{id}/cancel
+	Cancel pending work with recorded outcome/accounting.
+
+	DELETE /api/v1/runs/{id}
+	Discard permitted stored result data; do not erase quota obligations.
+
+	POST /api/v1/popular-destination-suggestions
+	Submit a nomination, not a route calculation.
+
+	Controlled outbound action
+	Resolve approved original/partner link; must not be an open redirect.
+
+
+
+Local file import needs no server upload endpoint by default. Export can be generated locally from an authorised complete dataset or streamed from the backend; apply the same permissions either way. Add admin endpoints separately with role checks. Define consistent typed error responses and correlation IDs before implementation.
+14. Security, privacy and operational controls
+14.1 Data isolation and input safety
+Enforce run ownership on every manifest, result chunk, cancellation, deletion and optional download request. An unguessable run ID is not sufficient authorisation. Use short-lived authorised object access or an authenticated streaming endpoint; do not publish private buckets.
+Keep routing, geocoding, AI, SMS and service-account secrets server-side. Browser map keys and Firebase public configuration are not equivalent to backend secrets; restrict them appropriately and never reuse a broad backend key in the client. Validate all incoming data regardless of frontend controls.
+Use provider/partner host allowlists and safe outbound fetch handling. Do not let a listing field, imported file or user destination turn the backend into an arbitrary URL fetcher. Sanitize display text, enforce a reviewed content-security policy and isolate third-party scripts. Uploaded JSON must never become executable HTML.
+Use default-deny client database/storage rules for protected collections and server-side authorisation for administrative operations. Test direct access to origin APIs and object URLs, not just requests through the intended UI.
+14.2 Crawler protection and free-run abuse
+Enable Cloudflare crawler controls according to the site's policy. Cloudflare provides specific AI-crawler controls alongside WAF/bot mechanisms; those are not a unique-human entitlement system. [S19] Do not block legitimate users or ordinary search discoverability indiscriminately.
+Maintain separate protections for public crawling, account creation, verification sends, location lookups, custom runs and admin access. Protect backend spending with concurrency limits, provider quotas, per-entitlement controls and an operator kill switch. Budget alerts alone are not a stop-work mechanism.
+14.3 Privacy and retention
+Keep private destinations out of public logs, analytics URLs, ad events and partner referrals. Log technical identifiers and sanitised error categories instead. Define retention separately for live listings, temporary result payloads, account verification, quota ledgers, security events, consent and partner events.
+No permanent archive of custom route results is required. Avoid backups or logs accidentally retaining discarded payloads indefinitely. Document how deletion affects replicas/backups and how minimal abuse/accounting evidence is treated. Select regions and vendors deliberately; do not claim that using a Swiss audience makes every service Swiss-resident.
+Publish appropriate privacy/terms information before launch and complete a jurisdiction/provider-specific review. This document specifies engineering safeguards, not a legal certification.
+14.4 Operational visibility
+Track ingestion completeness, source freshness, resolution failures, route success/no-route/error rates, batch retries, queue age, run completion/expiry, verification abuse, result-payload size, ad errors and referral failures. Record external requests/elements and AI usage units so costs can be analysed later without embedding today's tariffs.
+Provide admin controls for provider enablement, popular-profile publication, suggestion review, run cancellation, verification support, quota policy, feature flags, retention configuration and spending stops. Every privileged change needs actor, time and reason.
+15. Delivery sequence and acceptance
+15.1 Implementation order
+1. Establish domain contracts, configuration and test fixtures; resolve or record provider/eligibility gates. Produce a repository that runs locally without live credentials, with an unmistakable demo mode.
+2. Build the design system and the complete synthetic-data journey: popular selection, custom configuration/progress, result filtering/map interaction, import/export, ad placeholders and all error states. This is a testable interface, not completion of live features.
+3. Implement authorised ingestion, location resolution, identity/entitlement records, atomic usage accounting and background job orchestration. Test failures and duplicates before broad live routing.
+4. Integrate provider-backed route profiles, lawful storage behaviour and maintained popular datasets. Prove result completeness, precision labels and endpoint capability mapping with a bounded live test.
+5. Enable permitted portable exports/imports, production verification policy and approved ad/referral integrations. Keep unresolved gated features visibly unavailable, not deceptively simulated.
+6. Finish accessibility, mobile/motion review, performance tests, security tests, operational controls, deployment/rollback documentation and requirement-by-requirement evidence.
+These phases describe dependencies, not dates or promised development durations.
+15.2 Required acceptance cases
+	Test
+	Observable pass condition
+
+	A01 Standard search
+	Changing rent/bedroom/furnishing view filters before confirmation does not silently change the standard candidate universe.
+
+	A02 Free exploration
+	After a completed run, repeated property filters, map-zone filters and sorting cause zero routing calls.
+
+	A03 Explicit rerun
+	Editing destination/mode/preference starts no call until confirmation; old results retain their old definition.
+
+	A04 No custom sharing
+	Two users requesting identical inputs create isolated runs; neither can read the other's results.
+
+	A05 Nearby destinations
+	Two entrances across a barrier remain distinct; no proximity reuse occurs.
+
+	A06 Retry safety
+	Double-clicks, network retries and duplicate worker delivery do not duplicate allowance debits or successful batches.
+
+	A07 Concurrent allowance
+	Simultaneous run starts cannot exceed server-authorised available allowance.
+
+	A08 Multiple logins
+	Linking another supported login provider does not create another free entitlement.
+
+	A09 Verification policy
+	The same phone/institution evidence cannot claim a second entitlement under the chosen policy; uncertain cases have a support path.
+
+	A10 Shared network
+	Legitimate separate users on one university IP are not automatically treated as duplicates.
+
+	A11 Ingestion failure
+	An incomplete provider fetch does not mark the provider's entire inventory inactive.
+
+	A12 Attribute accuracy
+	Unknown facilities, shared laundry and source room counts are not falsely converted into confirmed private facilities or bedrooms.
+
+	A13 Route capabilities
+	Unsupported preference combinations are rejected or unavailable; no setting is silently ignored.
+
+	A14 Route details
+	Matrix-only rows do not display invented transfer counts, walking times or geometry.
+
+	A15 Honest failure
+	No-route/error/unresolved rows never appear as zero-minute winners.
+
+	A16 Coverage
+	Completed results reconcile with the frozen universe; partial runs show missing/failed counts explicitly.
+
+	A17 Consistent time
+	All batches use the recorded journey assumption, not varying implicit request times.
+
+	A18 Popular browsing
+	An available published profile loads without launching a custom full-market run.
+
+	A19 Popular suggestions
+	Equivalent nominations can be reviewed together without merging distinct entrances or starting computation automatically.
+
+	A20 Expiry
+	Expired run access is denied immediately by the application even if physical TTL deletion is pending.
+
+	A21 Portable round trip
+	A permitted complete export reopens with the same data, provenance and filterable universe and causes no routing call.
+
+	A22 Import safety
+	Oversized, malformed or script-bearing files fail safely; imported data cannot grant quota or partner credit.
+
+	A23 Stale snapshot
+	Reopened results are labelled with their original time; no false live-availability claim appears.
+
+	A24 Ad integrity
+	Ads are labelled, non-blocking and do not reload on every filter/progress update.
+
+	A25 Ranking integrity
+	Enabling a sponsor does not change organic order, durations, organic counts or filter truth.
+
+	A26 Tracking failure
+	Blocked ads/referral tracking do not stop the core task or source-link handoff.
+
+	A27 Privacy
+	Exact custom destinations and verification data do not appear in analytics, ad payloads or outbound partner URLs.
+
+	A28 Motion/accessibility
+	Keyboard, reduced-motion and mobile flows complete the same task; transitions do not trap input or move active targets.
+
+	A29 Map truth
+	Decorative connectors are not presented as routes; no unsupported commute contour is shown.
+
+	A30 Credential boundary
+	Direct origin/API/storage attempts cannot bypass ownership, verification, quota or job-start controls.
+
+	A31 Production gates
+	Missing credentials or permissions yield explicit unavailability; synthetic data is never labelled as live.
+
+	A32 Deployment
+	Staging cannot spend production allowances; deployment and rollback are reproducible from documentation.
+
+
+
+15.3 What the AI must hand over
+Deliver source code, setup instructions, example environment-variable names without secrets, provider adapters, database/storage rules and indexes, deployment configuration, fixture data, automated tests, and an operational runbook. Include a requirement-to-test matrix with evidence, plus a list of remaining gates and unimplemented features.
+Do not claim “complete” because screens render or mocks pass. Distinguish implemented logic, synthetic-data tests, live integration tests and production readiness. Tests that need absent credentials or permission must be reported as not run, with the affected requirement identified.
+16. Decisions still needed before live launch
+	Decision
+	Required outcome / safe interim behaviour
+
+	Routing data rights
+	Permission or approved provider approach for shared popular results, temporary custom storage and portable files. Use synthetic fixtures for affected workflows meanwhile.
+
+	Listing supply and rights
+	Named authorised providers and explicit media/storage/export conditions. No invented live inventory.
+
+	Verification policy
+	Decide original phone-backed approach versus institutional alternatives and define duplicate/recovery handling. Live free-run entitlement issuance stays disabled until configured.
+
+	Market and precision
+	Confirm launch coverage and treatment of approximate origins. No hidden geographic pruning or precision claims.
+
+	Route profiles and time basis
+	Choose exposed modes/preferences, time policy and popular refresh cadence. Unsupported options stay unavailable.
+
+	Dataset lifetime
+	Set permitted retention and cleanup targets; do not pick an arbitrary permanent cache.
+
+	Usage accounting
+	Confirm allowances, reset timezone, cancellations, partial failures and operator-credit rules. Monetary pricing is outside this brief.
+
+	Brand and motion system
+	Approve identity, typography, colour roles and representative interactions. Do not infer a brand name or final aesthetic from examples.
+
+	Ads and partnerships
+	Choose actual network/consent solution and signed partner integrations. Preserve hooks but do not invent active deals or sponsored inventory.
+
+
+
+17. Official technical references
+Product decisions are sourced from the project conversation, not from the references below. These references substantiate provider constraints and implementation facts only. Checked on 30 September 2026; the implementation team must recheck applicable contracts and materially changed APIs before live deployment.
+[S1] Google Maps Platform Terms of Service — caching and export restrictions.
+Open official reference
+[S2] Google Maps Platform Service Specific Terms — Routes and Geocoding conditions; billing-region distinction.
+Open official reference
+[S3] Routes API policies and attributions — place-ID exception, map and attribution requirements.
+Open official reference
+[S4] Geocoding API policies — source-specific use, storage and attribution requirements.
+Open official reference
+[S5] Routes API: Get a transit route — supported transit requests and preference limitations.
+Open official reference
+[S6] Routes API: TransitPreferences — available mode/preference enums.
+Open official reference
+[S7] Cloudflare Workers Static Assets — React/Vite hosting and asset/API routing.
+Open official reference
+[S8] Cloud Run: Execute jobs on a schedule — Cloud Scheduler integration.
+Open official reference
+[S9] Cloud Tasks: Create HTTP target tasks programmatically — authenticated worker delivery.
+Open official reference
+[S10] Firebase Authentication: Verify ID tokens — custom-backend identity verification.
+Open official reference
+[S11] Routes API: computeRouteMatrix — request fields, response fields and batch limits.
+Open official reference
+[S12] Firestore usage and limits — document-size constraint.
+Open official reference
+[S13] Firestore TTL policies — asynchronous deletion and subcollection behaviour.
+Open official reference
+[S14] Cloudflare Turnstile: Server-side validation — validation and token properties.
+Open official reference
+[S15] MDN: prefers-reduced-motion — browser accessibility preference.
+Open official reference
+[S16] web.dev: Web Vitals — experience thresholds and field-versus-lab measurement.
+Open official reference
+[S17] Google AdSense ad-placement policies — non-deceptive placements and refresh restrictions.
+Open official reference
+[S18] Google publisher consent-management requirements — personalised ads in the EEA, UK and Switzerland.
+Open official reference
+[S19] Cloudflare AI Crawl Control — crawler management and related protection products.
+Open official reference
+VERSION 1.0  ·  30 SEPTEMBER 2026	PAGE

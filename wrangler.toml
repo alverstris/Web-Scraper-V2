@@ -1,0 +1,43 @@
+name = "commute-property-search"
+main = "edge/worker.ts"
+compatibility_date = "2026-09-30"
+workers_dev = false
+preview_urls = false
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Every request passes through the security headers; API paths never reach the SPA.
+run_worker_first = true
+
+[vars]
+APP_ENV = "development"
+API_ENABLED = "false"
+GOOGLE_MAPS_ENABLED = "false"
+TURNSTILE_ENABLED = "false"
+
+[env.staging]
+name = "commute-property-search-staging"
+workers_dev = true
+preview_urls = false
+
+[env.staging.vars]
+APP_ENV = "staging"
+API_ENABLED = "false"
+GOOGLE_MAPS_ENABLED = "false"
+TURNSTILE_ENABLED = "false"
+# Set API_ORIGIN and FIREBASE_AUTH_DOMAIN explicitly in reviewed environment config.
+# Set EDGE_ORIGIN_SECRET using `wrangler secret put`, never a committed variable.
+
+[env.production]
+name = "commute-property-search-production"
+workers_dev = false
+preview_urls = false
+
+[env.production.vars]
+APP_ENV = "production"
+API_ENABLED = "false"
+GOOGLE_MAPS_ENABLED = "false"
+TURNSTILE_ENABLED = "false"
+# Add the approved custom domain route and separate production bindings before deployment.

@@ -1,0 +1,21 @@
+{
+  "environment": "staging",
+  "projectId": "REPLACE_WITH_SEPARATE_STAGING_PROJECT_ID",
+  "region": "REPLACE_WITH_APPROVED_CLOUD_RUN_REGION",
+  "firestoreLocation": "REPLACE_WITH_APPROVED_FIRESTORE_LOCATION",
+  "firestoreDatabase": "(default)",
+  "bucket": "REPLACE_WITH_GLOBALLY_UNIQUE_PRIVATE_BUCKET",
+  "artifactRepository": "commute-search",
+  "servicePrefix": "commute-staging",
+  "imageDigest": "REPLACE_WITH_FULL_ARTIFACT_REGISTRY_IMAGE_AT_SHA256_DIGEST",
+  "nodeImageDigest": "REPLACE_WITH_SUPPORTED_NODE_IMAGE_AT_SHA256_DIGEST",
+  "edgeSecretVersion": "REPLACE_WITH_INTEGER_SECRET_VERSION",
+  "evidenceSecretVersion": "REPLACE_WITH_INTEGER_SECRET_VERSION",
+  "turnstileSecretVersion": "REPLACE_WITH_INTEGER_SECRET_VERSION",
+  "providerSecrets": {},
+  "scheduleTimezone": "REPLACE_WITH_APPROVED_IANA_TIMEZONE",
+  "ingestSchedule": "0 4 * * *",
+  "cleanupSchedule": "*/15 * * * *",
+  "popularSchedule": "0 5 * * *",
+  "cloudEnvFile": "deploy/staging.local.env.yaml"
+}

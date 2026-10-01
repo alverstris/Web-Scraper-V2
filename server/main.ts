@@ -1,0 +1,13 @@
+import { createRuntime } from './runtime.ts';
+import { createApiServer } from './http.ts';
+const runtime=await createRuntime();
+const host=process.env.HOST??(runtime.mode==='demo'?'127.0.0.1':'0.0.0.0');
+if(runtime.mode==='demo'&&!['127.0.0.1','::1','localhost'].includes(host))throw new Error('Demo identities may only bind to loopback.');
+if(runtime.mode==='live'&&!process.env.EDGE_ORIGIN_SECRET)throw new Error('EDGE_ORIGIN_SECRET is required for live API origin protection.');
+const server=createApiServer(runtime.service,{originSecret:process.env.EDGE_ORIGIN_SECRET});
+const port=Number(process.env.PORT??8787);
+server.listen(port,host,()=>process.stdout.write(JSON.stringify({event:'api_listening',mode:runtime.mode,host,port})+'\n'));
+let reconciling=false;
+const timer=setInterval(()=>{if(reconciling)return;reconciling=true;void runtime.service.reconcile().catch(()=>{}).finally(()=>{reconciling=false;});},runtime.mode==='demo'?1500:30_000);
+void runtime.service.reconcile();
+const shutdown=()=>{clearInterval(timer);runtime.close();server.close();};process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);

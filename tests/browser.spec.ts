@@ -1,0 +1,116 @@
+import { test, expect } from '@playwright/test';
+import { signIn } from './browser-auth';
+
+test('saved EPFL dataset, free filters, explicit private run and portable round trip', async ({ page }) => {
+  let starts = 0;
+  page.on('request', request => {if(request.method()==='POST' && request.url().endsWith('/api/v1/runs')) starts++;});
+  await signIn(page, 'alice');
+  const results=page.locator('#search-results');
+  await expect(results.getByRole('heading',{name:'Search results',exact:true})).toBeVisible();
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await results.scrollIntoViewIfNeeded();
+  await page.screenshot({path:'test-results/popular-desktop.png'});
+  const calculation = await results.locator('.result-heading p').nth(1).textContent();
+  await page.getByLabel('Maximum rent (source currency / period)',{exact:true}).fill('900');
+  await expect(page.locator('.result-card')).toHaveCount(4);
+  await page.getByLabel('Minimum bedrooms',{exact:true}).fill('2');
+  await expect(page.locator('.result-card')).toHaveCount(2);
+  await page.getByLabel('Sort',{exact:true}).selectOption('COMMUTE_DESC');
+  expect(starts).toBe(0);
+
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Save results snapshot'}).click();
+  const download=await downloadPromise;
+  const file=await download.path();
+  expect(file).toBeTruthy();
+  await page.getByRole('button',{name:'Open / save snapshot',exact:true}).click();
+  await page.getByLabel('Open a saved search snapshot').setInputFiles(file!);
+  await expect(results.getByText('Saved snapshot · complete',{exact:true})).toBeVisible();
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await expect(results.locator('.result-heading p').nth(1)).toHaveText(calculation!);
+  expect(starts).toBe(0);
+
+  await expect(page.locator('.account-summary')).toContainText('Alice');
+  await page.getByRole('button',{name:'Custom commute',exact:true}).click();
+  await page.getByLabel('Destination name or address').fill('EPFL');
+  await page.getByRole('button',{name:'Find destination',exact:true}).click();
+  await page.getByRole('button',{name:/Confirm this destination: EPFL.*east/}).click();
+  await page.getByRole('button',{name:'Review custom run',exact:true}).click();
+  expect(starts).toBe(0);
+  await expect(page.getByRole('region',{name:'Confirm custom run'})).toBeVisible();
+  await page.getByRole('button',{name:'Confirm and start one run',exact:true}).click();
+  await expect(page.locator('#progress').getByText(/COMPLETE · allowance finalised/)).toBeVisible();
+  expect(starts).toBe(1);
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await page.getByLabel('Travel mode').selectOption('WALK');
+  await page.getByLabel('Destination name or address').fill('UNIL');
+  await expect(results.getByText(/EPFL.*east entrance/).first()).toBeVisible();
+  await expect(results.getByText(/Home to destination · Public transport/)).toBeVisible();
+  expect(starts).toBe(1);
+  await page.getByLabel('Maximum commute (minutes)').fill('1');
+  await expect(page.locator('.result-card')).toHaveCount(0);
+  expect(starts).toBe(1);
+  await page.getByRole('button',{name:'Reset property filters'}).click();
+  await page.getByRole('button',{name:'Map / coordinates',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Synthetic coordinate overview'})).toBeVisible();
+  await page.locator('.map-marker').first().click();
+  await expect(page.locator('.result-card.selected')).toHaveCount(1);
+  await expect(page.locator('.details h3')).toBeVisible();
+  await expect(page.locator('.details h3')).toBeFocused();
+  await page.getByRole('button',{name:'Clear selected property'}).click();
+  await expect(page.locator('.result-card.selected')).toHaveCount(0);
+  await page.getByRole('button',{name:'Discard stored results'}).click();
+  await page.getByRole('button',{name:'Discard results permanently'}).click();
+  await expect(page.locator('#search-results')).toHaveCount(0);
+});
+
+test('invalid import, mobile controls and keyboard focus remain usable',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await signIn(page, 'bob');
+  await page.goto('/dashboard');
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link',{name:/Skip to/})).toBeFocused();
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await page.getByRole('button',{name:'Map / coordinates',exact:true}).click();
+  await page.getByRole('button',{name:'List',exact:true}).click();
+  await page.getByRole('button',{name:'Open / save snapshot',exact:true}).click();
+  await page.getByLabel('Open a saved search snapshot').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{"script":"<script>alert(1)</script>"}')});
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+  await page.screenshot({path:'test-results/mobile-reduced-motion.png'});
+});
+
+
+
+test('EPFL property facts, shared facilities and geographic filters stay local', async ({ page }) => {
+  let starts = 0;
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/runs') starts++; });
+  await signIn(page, 'new');
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await page.getByLabel('Washing machine', { exact: true }).selectOption('SHARED');
+  await expect(page.locator('.result-card')).toHaveCount(8);
+  await page.getByLabel('Minimum rooms (separate from bedrooms)', { exact: true }).fill('2.5');
+  await expect(page.locator('.result-card')).toHaveCount(0);
+  await expect(page.locator('#search-results')).toContainText('No results match these filters.');
+  await page.getByRole('button', { name: 'Reset property filters', exact: true }).click();
+  await page.getByLabel('Furnishing', { exact: true }).selectOption('UNKNOWN');
+  await expect(page.locator('.result-card')).toHaveCount(4);
+  await page.getByLabel('Minimum bedrooms', { exact: true }).fill('0');
+  await expect(page.locator('.result-card')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Reset property filters', exact: true }).click();
+  await page.getByText('Geographic view filter', { exact: true }).click();
+  await page.getByLabel('north', { exact: true }).fill('46.521');
+  await page.getByLabel('south', { exact: true }).fill('46.510');
+  await page.getByLabel('east', { exact: true }).fill('6.621');
+  await page.getByLabel('west', { exact: true }).fill('6.549');
+  await page.getByRole('button', { name: 'Apply geographic filter', exact: true }).click();
+  await expect(page.locator('.result-card')).toHaveCount(8);
+  await page.getByRole('button', { name: 'Clear geographic filter', exact: true }).click();
+  await expect(page.locator('.result-card')).toHaveCount(24);
+  await page.getByLabel('Include rows without an available route', { exact: true }).uncheck();
+  await expect(page.locator('.result-card')).toHaveCount(18);
+  expect(starts).toBe(0);
+});
