@@ -4,7 +4,18 @@ This is an evidence register, not a blanket production-readiness claim. The curr
 
 The application contains synthetic demonstration inventory and journey estimates. Provider request/response fixtures and mocked HTTP are not live integration tests. Live listing permissions, routing retention/export rights, verification policy and launch policies remain gates; see `gates.md`.
 
-## Current Keywise evidence — 1 October 2026
+## Local filter and interaction review — 1 October 2026
+
+- On the user's Windows laptop, `npm.cmd run build` passed the TypeScript check and Vite production build. The final full unit suite passed **120 tests**, including accessible slider bounds and startup with preserved staff controls.
+- **24 browser journeys were validated in Microsoft Edge** against separate ignored test databases. The first full run passed 21; two stale fixture expectations were corrected and a saved-mode selection feedback issue was fixed. All three remaining journeys passed targeted reruns. The mode test also explicitly reopens its remounted transit-details disclosure. This count combines the full run and targeted reruns.
+- Browser checks include real pointer drags of both rent handles, keyboard sliders, constrained room/count inputs, named-area and facility choices, actual stored commute/walking/transfer/type filtering, all four prepared travel modes, unchanged allowances, full immutable snapshot roundtrips and a 390px mobile layout without horizontal overflow.
+- The compact panel exposes commute, monthly-rent range and bedroom choices first. Transit details and further housing criteria are grouped and collapsed; active restrictions are individually removable. Sorting is beside the results, and longer calculation/coverage metadata is under Search details. Native controls retain visible labels, values and keyboard access. This is not a complete assistive-technology or physical-device audit.
+- Fixture-v3 contains **24 varied fictional homes** and **12 prepared profiles**: EPFL east, EPFL west and UNIL, each with walking, cycling, driving and public transport. Transit measures are explicitly simulated. CHF/month, m², whole bedroom/bathroom counts and half-room increments are validated consistently across feeds, snapshots and view state.
+- Migration tests retain private snapshots, account allowances, source controls and deliberate unpublication. Pending synthetic-v1/v2 runs finish with their frozen algorithms. Loading a dataset without transit measurements clears only unsupported controls; housing choices remain applicable.
+- Startup defers automatic profile preparation when a saved spending stop or disabled source blocks it. Regression tests confirm that existing snapshots and staff API access remain available, staff can restore those controls, and explicit maintenance then prepares the twelve profiles. Manual maintenance remains blocked while the controls are active.
+- The normal local services use the existing user data directory and remain at `http://127.0.0.1:5173/` and API port 8787. Browser tests used separate stores. Live provider integrations and deployment remain deferred.
+
+## Earlier Keywise cloud evidence — 1 October 2026
 
 - `pnpm build` passed the strict TypeScript check and Vite production build.
 - `pnpm test` passed **88 non-browser tests**, with zero failures. Coverage includes domain rules, API authority, allowance accounting, ingestion/provider adapters, local password and cookie-session access, ownership, snapshots, staff operations and persistent EPFL fixture startup.

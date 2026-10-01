@@ -121,7 +121,7 @@ test('A12 property constraints exclude unknown values and preserve rooms/private
   assert.ok(!filterDataset(data, { ...all, minArea: 0 }).some(item => item.listing.id === data.listings[0].id));
   assert.ok(!filterDataset(data, { ...all, minBathrooms: 0 }).some(item => item.listing.id === data.listings[0].id));
   assert.equal(filterDataset(data, { ...all, minRooms: 2.5 }).length, 3);
-  assert.equal(filterDataset(data, { ...all, minBedrooms: 2.5 }).length, 0);
+  assert.throws(()=>filterDataset(data, { ...all, minBedrooms: 2.5 }), /expected int/i);
   assert.ok(!filterDataset(data, { ...all, facilities: { washingMachine: 'PRIVATE' } }).some(item => item.listing.facilities.washingMachine === 'SHARED'));
   data.listings[0].rent.amount = null;
   assert.ok(!filterDataset(data, { ...all, maxRent: 10_000 }).some(item => item.listing.id === data.listings[0].id));

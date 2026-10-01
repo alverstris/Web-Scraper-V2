@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 dist/
 .env
 .env.*.local
@@ -9,3 +10,5 @@ playwright-report/
 .wrangler/
 deploy/*.local.*
 .tmp-edge/
+Commute_Property_Search_AI_Implementation_Brief.docx
+Keywise_Chat_Transcript_With_Attachments.zip

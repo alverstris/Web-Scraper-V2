@@ -83,7 +83,7 @@ test('bounded provider retries leave explicit errors and one finalised allowance
   assert.equal(calls,3);assert.equal(done.state,'FAILED');assert.equal(done.counts.completed,24);assert.equal(done.accounting,'FINALISED');assert.equal(done.externalRequests,3);assert.ok(done.counts.failed>0);
 });
 test('A18/A19 popular browse and exact suggestion aggregation do not start custom work',async()=>{
-  const h=await setup();await h.service.maintainPopular();const calls=h.calls(),profiles=await h.service.popularProfiles();assert.equal(profiles.length,3);
+  const h=await setup();await h.service.maintainPopular();const calls=h.calls(),profiles=await h.service.popularProfiles();assert.equal(profiles.length,12);
   await h.service.popularDataset(profiles[0].id);assert.equal(h.calls(),calls);
   const a=await h.request(alice),b=await h.request(bob),west=await h.request(alice,1);const first=await h.service.suggest(alice,{destinationSelectionId:a.destinationSelectionId});
   assert.equal((await h.service.suggest(alice,{destinationSelectionId:a.destinationSelectionId})).distinctRequests,1);assert.equal((await h.service.suggest(bob,{destinationSelectionId:b.destinationSelectionId})).distinctRequests,2);assert.notEqual((await h.service.suggest(alice,{destinationSelectionId:west.destinationSelectionId})).id,first.id);

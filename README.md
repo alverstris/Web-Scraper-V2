@@ -47,6 +47,8 @@ The [manual testing guide](docs/demo-user-flows.md) describes current customer a
 
 The synthetic map is a labelled coordinate schematic. It is not a navigable map, transit geometry or an isochrone. An optional Google Maps component is included but requires approved live data, restricted browser credentials and staging verification. The website and dashboard use the Keywise visual identity; further animation and live-map integration remain separate work. Ordinary property filters never become hidden constraints on a standard routing run.
 
+The local flow demonstration prepares public-transport, walking, cycling and driving profiles for EPFL east, EPFL west and UNIL. Commute filters come first: maximum journey minutes, and recorded synthetic walking time, transfers and allowed transit types where available. All rental comparisons use CHF per month; housing facts use fixed units and controlled ranges/options. Named-area filtering and map drawing change the current view only. Changing a saved travel mode opens its actual prepared dataset without using a custom run. See the [frontend research and complete brief-filter mapping](docs/keywise-website-research.md#rental-filtering-research-and-applied-rules--1-october-2026).
+
 ## Commands
 
 | Command | Purpose |

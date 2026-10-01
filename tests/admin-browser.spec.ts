@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { accountRequest, csrfHeaders, loadProfile, signIn } from './browser-auth';
+import { accountRequest, csrfHeaders, expandFilters, loadProfile, signIn } from './browser-auth';
 import type { PopularProfile } from '../shared/contracts';
 
 async function openAdmin(page: Page) { await signIn(page, 'admin'); }
@@ -178,6 +178,7 @@ test('approved nomination is explicitly published, refreshed and publicly browse
     await page.goto('/dashboard');
     await loadProfile(page, name);
     await expect(page.locator('.result-card')).toHaveCount(24);
+    await expandFilters(page, 'Search details');
     await expect(page.locator('#search-results').getByText(/Home to destination · Cycling/)).toBeVisible();
     expect(publicationCalls).toBe(2);
     expect(customCalls).toBe(0);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Dataset } from './contracts';
+import { facilitySchema, furnishingSchema, housingValueSchemas, localitySchema, propertyTypeSchema, transitModeSchema, FILTER_LIMITS } from './search-filters.ts';
 
 export const PORTABLE_LIMITS = Object.freeze({ bytes: 8 * 1024 * 1024, rows: 10_000, nesting: 20 });
 export class SnapshotError extends Error {
@@ -17,8 +18,8 @@ const count = nonnegative.int().max(PORTABLE_LIMITS.rows);
 const point = z.object({ lat: z.number().finite().min(-90).max(90), lng: z.number().finite().min(-180).max(180) }).strict();
 const locationShape = { point: point.optional(), label: plainText(), precision: z.enum(['EXACT','BUILDING','STREET','LOCALITY','UNRESOLVED']), provenance: plainText() };
 const location = z.object(locationShape).strict();
-const destination = z.object({ ...locationShape, id, country: plainText(100), locality: plainText(256), context: plainText() }).strict();
-const facility = z.enum(['PRIVATE','SHARED','ABSENT','UNKNOWN','REVIEW']);
+const destination = z.object({ ...locationShape, id, country: plainText(2).length(2), locality: plainText(256), context: plainText() }).strict();
+const facility = facilitySchema;
 const dangerousKey = /^(?:__proto__|prototype|constructor|(?:access|refresh|id)?token|authorization|credentials?|secrets?|api[_-]?key|password|entitlement(?:Id|s)?|quotas?|phone|email|verificationEvidence|trackingId|campaignId)$/i;
 
 /** Canonical public HTTPS source links only. These links are never fetched by import. */
@@ -39,19 +40,23 @@ function safeSourceUrl(value: string): boolean {
 const listing = z.object({
   id, sourceId: id, sourceListingId: id, version: id, marketId: id,
   sourceUrl: plainText(2048).refine(safeSourceUrl, 'Source URL must be a canonical public HTTPS link without tracking parameters.'),
-  title: plainText(512), location, active: z.boolean(), status: z.enum(['ROUTABLE','APPROXIMATE','UNRESOLVED','INACTIVE']),
-  rent: z.object({ amount: nonnegative.max(100_000_000).nullable(), currency: z.string().regex(/^[A-Z]{3}$/), period: z.enum(['MONTH','WEEK']), charges: nonnegative.max(100_000_000).nullable() }).strict(),
-  propertyType: plainText(128), floorArea: nonnegative.max(1_000_000).nullable(), rooms: nonnegative.max(10_000).nullable(), bedrooms: nonnegative.int().max(10_000).nullable(), bathrooms: nonnegative.max(10_000).nullable(),
-  furnishing: z.enum(['FURNISHED','UNFURNISHED','PARTIAL','UNKNOWN']),
+  title: plainText(512), location, locality:localitySchema.and(plainText(120)).optional(), active: z.boolean(), status: z.enum(['ROUTABLE','APPROXIMATE','UNRESOLVED','INACTIVE']),
+  rent: z.object({ amount: housingValueSchemas.rent.nullable(), currency: z.literal('CHF'), period: z.literal('MONTH'), charges: housingValueSchemas.rent.nullable() }).strict(),
+  propertyType: propertyTypeSchema, floorArea: housingValueSchemas.area.nullable(), rooms: housingValueSchemas.rooms.nullable(), bedrooms: housingValueSchemas.bedrooms.nullable(), bathrooms: housingValueSchemas.bathrooms.nullable(),
+  furnishing: furnishingSchema,
   facilities: z.object({ washingMachine: facility, dryer: facility, kitchen: facility, dishwasher: facility, airConditioning: facility, balcony: facility, parking: facility }).strict(),
   evidence: z.record(plainText(128).refine(key => !dangerousKey.test(key), 'Sensitive evidence keys are prohibited.'), plainText(8192)).refine(value => Object.keys(value).length <= 64, 'Too many evidence entries.'),
   extractionVersion: id, firstSeenAt: isoTime, lastSeenAt: isoTime, sourceUpdatedAt: isoTime.nullable(), ingestedAt: isoTime,
-}).strict();
+}).strict().superRefine((value,ctx)=>{
+  const resolved=!!value.location.point&&value.location.precision!=='UNRESOLVED';
+  const expected=!value.active?'INACTIVE':!resolved?'UNRESOLVED':value.location.precision==='EXACT'?'ROUTABLE':'APPROXIMATE';
+  if(value.status!==expected)ctx.addIssue({code:'custom',path:['status'],message:'Listing status must match activity, location precision and coordinates.'});
+});
 
 const definition = z.object({
   destination, direction: z.literal('HOME_TO_DESTINATION'), mode: z.enum(['WALK','BICYCLE','DRIVE','TRANSIT']),
   transitPreference: z.enum(['DEFAULT','LESS_WALKING','FEWER_TRANSFERS']),
-  preferredTransitModes: z.array(z.enum(['BUS','SUBWAY','TRAIN','LIGHT_RAIL','RAIL'])).max(5),
+  preferredTransitModes: z.array(transitModeSchema).max(5),
   timeBasis: z.object({ kind: z.enum(['DEPARTURE','ARRIVAL']), at: isoTime, timezone: plainText(100).refine(value => { try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; } }, 'Unknown time zone.') }).strict(),
   provider: z.enum(['synthetic','google']), adapterVersion: id,
 }).strict().superRefine((value, ctx) => {
@@ -63,11 +68,11 @@ const definition = z.object({
 
 const row = z.object({
   listingId: id, listingVersion: id, state: z.enum(['SUCCESS','NO_ROUTE','UNRESOLVED_ORIGIN','UNSUPPORTED_SETTINGS','PROVIDER_ERROR']),
-  durationSeconds: nonnegative.max(31_536_000).optional(), distanceMeters: nonnegative.max(100_000_000).optional(), walkingSeconds: nonnegative.max(31_536_000).optional(), transfers: nonnegative.int().max(10_000).optional(), geometry: plainText(131_072).optional(),
+  durationSeconds: nonnegative.max(31_536_000).optional(), distanceMeters: nonnegative.max(100_000_000).optional(), walkingSeconds: nonnegative.max(31_536_000).optional(), transfers: nonnegative.int().max(FILTER_LIMITS.transfers).optional(), transitModes:z.array(transitModeSchema).min(1).max(5).refine(values=>new Set(values).size===values.length,'Measured transit types must be unique.').optional(), geometry: plainText(131_072).optional(),
   warnings: z.array(plainText()).max(32), provider: id, calculatedAt: isoTime,
 }).strict().superRefine((value, ctx) => {
   if (value.state === 'SUCCESS' && value.durationSeconds === undefined) ctx.addIssue({ code: 'custom', message: 'A successful route needs a measured duration.' });
-  if (value.state !== 'SUCCESS' && [value.durationSeconds,value.distanceMeters,value.walkingSeconds,value.transfers,value.geometry].some(item => item !== undefined)) ctx.addIssue({ code: 'custom', message: 'Unavailable routes cannot contain measured route details.' });
+  if (value.state !== 'SUCCESS' && [value.durationSeconds,value.distanceMeters,value.walkingSeconds,value.transfers,value.transitModes,value.geometry].some(item => item !== undefined)) ctx.addIssue({ code: 'custom', message: 'Unavailable routes cannot contain measured route details.' });
   if (value.walkingSeconds !== undefined && value.durationSeconds !== undefined && value.walkingSeconds > value.durationSeconds) ctx.addIssue({ code: 'custom', message: 'Walking duration cannot exceed total duration.' });
 });
 
@@ -89,6 +94,7 @@ const datasetSchema = z.object({
     rowIds.add(item.listingId);
     if (listingRefs.get(item.listingId) !== item.listingVersion) invalid('Route references must match the frozen listing version.');
     if (item.provider !== 'synthetic') invalid('Synthetic snapshots cannot contain live provider rows.');
+    if(value.definition.mode!=='TRANSIT'&&[item.transfers,item.transitModes].some(detail=>detail!==undefined))invalid('Transit measurements cannot apply to another transport mode.');
     if (item.state === 'SUCCESS' && !resolvedOrigins.has(item.listingId)) invalid('A successful route needs a resolved origin point.');
   }
   if (value.listings.some(item => item.marketId !== value.marketId)) invalid('Every listing must belong to the declared market.');

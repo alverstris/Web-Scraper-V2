@@ -1,4 +1,6 @@
 export type Mode = 'WALK' | 'BICYCLE' | 'DRIVE' | 'TRANSIT';
+export type TransitMode = 'BUS' | 'SUBWAY' | 'TRAIN' | 'LIGHT_RAIL' | 'RAIL';
+export type PropertyType = 'STUDIO' | 'APARTMENT' | 'HOUSE' | 'ROOM' | 'UNKNOWN';
 export type TransitPreference = 'DEFAULT' | 'LESS_WALKING' | 'FEWER_TRANSFERS';
 export type Precision = 'EXACT' | 'BUILDING' | 'STREET' | 'LOCALITY' | 'UNRESOLVED';
 export type Facility = 'PRIVATE' | 'SHARED' | 'ABSENT' | 'UNKNOWN' | 'REVIEW';
@@ -8,24 +10,24 @@ export interface Location { point?: Point; label: string; precision: Precision; 
 export interface Destination extends Location { id: string; country: string; locality: string; context: string }
 export interface ListingVersion {
   id: string; sourceId: string; sourceListingId: string; version: string; marketId: string;
-  sourceUrl: string; title: string; location: Location; active: boolean;
+  sourceUrl: string; title: string; location: Location; locality?: string; active: boolean;
   status: 'ROUTABLE'|'APPROXIMATE'|'UNRESOLVED'|'INACTIVE';
-  rent: { amount: number|null; currency: string; period: 'MONTH'|'WEEK'; charges: number|null };
-  propertyType: string; floorArea: number|null; rooms: number|null; bedrooms: number|null; bathrooms: number|null;
+  rent: { amount: number|null; currency: 'CHF'; period: 'MONTH'; charges: number|null };
+  propertyType: PropertyType; floorArea: number|null; rooms: number|null; bedrooms: number|null; bathrooms: number|null;
   furnishing: 'FURNISHED'|'UNFURNISHED'|'PARTIAL'|'UNKNOWN';
   facilities: Record<FacilityKey, Facility>; evidence: Record<string,string>; extractionVersion: string;
   firstSeenAt: string; lastSeenAt: string; sourceUpdatedAt: string|null; ingestedAt: string;
 }
 export interface RouteDefinition {
   destination: Destination; direction: 'HOME_TO_DESTINATION'; mode: Mode;
-  transitPreference: TransitPreference; preferredTransitModes: ('BUS'|'SUBWAY'|'TRAIN'|'LIGHT_RAIL'|'RAIL')[];
+  transitPreference: TransitPreference; preferredTransitModes: TransitMode[];
   timeBasis: { kind: 'DEPARTURE'|'ARRIVAL'; at: string; timezone: string };
   provider: 'synthetic'|'google'; adapterVersion: string;
 }
 export type RowState = 'SUCCESS'|'NO_ROUTE'|'UNRESOLVED_ORIGIN'|'UNSUPPORTED_SETTINGS'|'PROVIDER_ERROR';
 export interface RouteRow {
   listingId: string; listingVersion: string; state: RowState; durationSeconds?: number; distanceMeters?: number;
-  walkingSeconds?: number; transfers?: number; geometry?: string;
+  walkingSeconds?: number; transfers?: number; transitModes?: TransitMode[]; geometry?: string;
   warnings: string[]; provider: string; calculatedAt: string;
 }
 export type RunState = 'QUEUED'|'RUNNING'|'COMPLETE'|'PARTIAL'|'FAILED'|'CANCELLED';
@@ -47,10 +49,12 @@ export interface CreateRunRequest {
   routeDefinition: Omit<RouteDefinition,'destination'|'provider'|'adapterVersion'>; verificationChallenge?: string;
 }
 export interface ViewState {
-  maxRent?: number; minBedrooms?: number; minRooms?: number; minBathrooms?:number; minArea?:number; maxCommuteMinutes?:number;
-  furnishing?: ListingVersion['furnishing']; propertyType?: string; facilities?: Partial<Record<FacilityKey,Facility>>;
+  locality?: string; minRent?: number; maxRent?: number; minBedrooms?: number; maxBedrooms?: number; minRooms?: number; maxRooms?: number;
+  minBathrooms?:number; maxBathrooms?:number; minArea?:number; maxArea?:number; maxCommuteMinutes?:number;
+  maxWalkingMinutes?:number; maxTransfers?:number; transitModes?:TransitMode[];
+  furnishing?: ListingVersion['furnishing']; propertyType?: PropertyType; facilities?: Partial<Record<FacilityKey,Facility>>;
   bounds?: {north:number;south:number;east:number;west:number};
-  sort: 'COMMUTE_ASC'|'COMMUTE_DESC'|'RENT_ASC'|'RENT_DESC'; includeUnavailable: boolean; selectedId?:string;
+  sort: 'COMMUTE_ASC'|'COMMUTE_DESC'|'RENT_ASC'|'RENT_DESC'|'WALKING_ASC'|'WALKING_DESC'; includeUnavailable: boolean; selectedId?:string;
 }
 export interface SourcePermissions {
   retrieval:boolean; storage:boolean; export:boolean; descriptions:boolean; images:boolean;

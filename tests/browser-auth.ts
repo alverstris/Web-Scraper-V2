@@ -53,6 +53,27 @@ export async function allowance(request: APIRequestContext): Promise<Entitlement
 
 export function navigation(page: Page) { return page.getByRole('navigation', { name: 'Search sections' }); }
 
+/** Exercise a native range through its keyboard controls, including its enforced step. */
+export async function setRange(page: Page, label: string, value: number) {
+  const control = page.getByRole('slider', { name: label, exact: true });
+  const minimum = Number(await control.getAttribute('min'));
+  const step = Number(await control.getAttribute('step'));
+  expect(step).toBeGreaterThan(0);
+  expect((value - minimum) % step).toBe(0);
+  await control.press('Home');
+  const startingValue = Number(await control.inputValue());
+  const direction = value >= startingValue ? 'ArrowRight' : 'ArrowLeft';
+  for (let index = 0; index < Math.abs(value - startingValue) / step; index++) await control.press(direction);
+  await expect(control).toHaveValue(String(value));
+}
+
+export async function expandFilters(page: Page, name: string | RegExp) {
+  const prefix = typeof name === 'string' ? new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) : name;
+  const summary = page.locator('summary').filter({ hasText: prefix });
+  const details = summary.locator('xpath=ancestor::details[1]');
+  if (await details.getAttribute('open') === null) await summary.click();
+}
+
 export async function loadProfile(page: Page, name?: string) {
   await expect(page.locator('.result-card')).toHaveCount(24);
   await navigation(page).getByRole('button', { name: 'Popular destinations', exact: true }).click();

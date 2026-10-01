@@ -1,29 +1,88 @@
-import { lazy, Suspense, useRef, useState, type PointerEvent } from 'react';
-import type { Dataset, Facility, FacilityKey, ListingVersion, ViewState } from '../shared/contracts';
+import { lazy, Suspense, useId, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import type { Dataset, Facility, FacilityKey, ListingVersion, TransitMode, ViewState } from '../shared/contracts';
+import { FILTER_LIMITS, FILTER_OPTIONS, validateViewState } from '../shared/search-filters';
 import type { ResultItem } from './worker-client';
 import { AdPlacement } from './ads';
-import { CountsSummary, DefinitionSummary, Field, Panel, dateLabel } from './ui';
+import { CountsSummary, DefinitionSummary, Field, Panel, dateLabel, modeLabels } from './ui';
 
 const facilityLabels: Record<FacilityKey,string> = {washingMachine:'Washing machine',dryer:'Dryer',kitchen:'Kitchen',dishwasher:'Dishwasher',airConditioning:'Air conditioning',balcony:'Balcony',parking:'Parking'};
 const facilityValueLabels: Record<Facility,string> = {PRIVATE:'Private',SHARED:'Shared',ABSENT:'Explicitly absent',UNKNOWN:'Not stated',REVIEW:'Needs review'};
 const furnishingLabels: Record<ListingVersion['furnishing'],string> = {FURNISHED:'Furnished',UNFURNISHED:'Unfurnished',PARTIAL:'Partly furnished',UNKNOWN:'Furnishing not stated'};
+const transitLabels: Record<TransitMode,string> = {BUS:'Bus',SUBWAY:'Metro',TRAIN:'Train',LIGHT_RAIL:'Light rail',RAIL:'Rail'};
 const GoogleMap = lazy(()=>import('./google-map'));
 const routeLabels = {SUCCESS:'Available journey',NO_ROUTE:'No journey found',UNRESOLVED_ORIGIN:'Location too imprecise to calculate',UNSUPPORTED_SETTINGS:'Journey settings not supported',PROVIDER_ERROR:'Journey calculation unavailable'};
 export function money(listing: ResultItem['listing']) {
-  return listing.rent.amount === null ? 'Rent not stated' : `${listing.rent.currency} ${listing.rent.amount.toLocaleString()} / ${listing.rent.period.toLowerCase()}`;
+  return listing.rent.amount === null ? 'Rent not stated' : `CHF ${listing.rent.amount.toLocaleString('en-CH')}/month`;
 }
 function commute(route: ResultItem['route']) { return route.state === 'SUCCESS' && route.durationSeconds !== undefined ? `${Math.ceil(route.durationSeconds/60)} min` : routeLabels[route.state]; }
 
+function MeasuredJourney({item,mode}:{item:ResultItem;mode:Dataset['definition']['mode']}) {
+  if(item.route.state!=='SUCCESS'||mode!=='TRANSIT')return null;
+  if(item.route.walkingSeconds===undefined&&item.route.transfers===undefined&&item.route.transitModes===undefined)return null;
+  return <p className="measured-journey-facts">
+    {item.route.walkingSeconds!==undefined&&<span>{Math.ceil(item.route.walkingSeconds/60)} min walking</span>}
+    {item.route.transfers!==undefined&&<span>{item.route.transfers} {item.route.transfers===1?'transfer':'transfers'}</span>}
+    {item.route.transitModes!==undefined&&<span>{item.route.transitModes.length?item.route.transitModes.map(type=>transitLabels[type]).join(' · '):'No transit leg'}</span>}
+  </p>;
+}
+
 export function activeFilterLabels(view:ViewState):string[] {
   const labels:string[] = [];
-  const numeric: [keyof ViewState,string,string][] = [['maxRent','Maximum rent',' (source currency / period)'],['minBedrooms','Minimum bedrooms',''],['minRooms','Minimum rooms',''],['minBathrooms','Minimum bathrooms',''],['minArea','Minimum floor area',' m²'],['maxCommuteMinutes','Maximum commute',' min']];
+  const numeric: [keyof ViewState,string,string][] = [['maxCommuteMinutes','Maximum commute',' min'],['maxWalkingMinutes','Maximum walking',' min'],['maxTransfers','Maximum transfers',''],['minRent','Minimum rent',' CHF/month'],['maxRent','Maximum rent',' CHF/month'],['minRooms','Minimum rooms',''],['maxRooms','Maximum rooms',''],['minBedrooms','Minimum bedrooms',''],['maxBedrooms','Maximum bedrooms',''],['minBathrooms','Minimum bathrooms',''],['maxBathrooms','Maximum bathrooms',''],['minArea','Minimum floor area',' m²'],['maxArea','Maximum floor area',' m²']];
   for(const [key,label,unit] of numeric) if(view[key]!==undefined) labels.push(`${label}: ${view[key]}${unit}`);
+  if(view.transitModes!==undefined)labels.push(`Allowed transit types: ${view.transitModes.length?view.transitModes.map(type=>transitLabels[type]).join(', '):'None'}`);
+  if(view.locality)labels.push(`Area: ${view.locality}`);
   if(view.furnishing) labels.push(furnishingLabels[view.furnishing]);
-  if(view.propertyType) labels.push(`Property type: ${view.propertyType}`);
+  if(view.propertyType) labels.push(`Property type: ${FILTER_OPTIONS.propertyTypes.find(option=>option.value===view.propertyType)?.label??view.propertyType}`);
   for(const [key,value] of Object.entries(view.facilities ?? {})) if(value) labels.push(`${facilityLabels[key as FacilityKey]}: ${facilityValueLabels[value]}`);
   if(view.bounds) labels.push('Geographic area');
   if(!view.includeUnavailable) labels.push('Available journeys only');
   return labels;
+}
+
+export function removeActiveFilter(view:ViewState,label:string):ViewState {
+  const numeric: [keyof ViewState,string][] = [['maxCommuteMinutes','Maximum commute:'],['maxWalkingMinutes','Maximum walking:'],['maxTransfers','Maximum transfers:'],['minRent','Minimum rent:'],['maxRent','Maximum rent:'],['minRooms','Minimum rooms:'],['maxRooms','Maximum rooms:'],['minBedrooms','Minimum bedrooms:'],['maxBedrooms','Maximum bedrooms:'],['minBathrooms','Minimum bathrooms:'],['maxBathrooms','Maximum bathrooms:'],['minArea','Minimum floor area:'],['maxArea','Maximum floor area:']];
+  const key=numeric.find(([,prefix])=>label.startsWith(prefix))?.[0];
+  if(key)return validateViewState({...view,[key]:undefined});
+  if(label.startsWith('Allowed transit types:'))return validateViewState({...view,transitModes:undefined});
+  if(label.startsWith('Area:'))return validateViewState({...view,locality:undefined});
+  if(label.startsWith('Property type:'))return validateViewState({...view,propertyType:undefined});
+  if(view.furnishing&&label===furnishingLabels[view.furnishing])return validateViewState({...view,furnishing:undefined});
+  if(label==='Geographic area')return validateViewState({...view,bounds:undefined});
+  if(label==='Available journeys only')return validateViewState({...view,includeUnavailable:true});
+  const facility=(Object.entries(facilityLabels) as [FacilityKey,string][]).find(([,name])=>label.startsWith(name+':'))?.[0];
+  if(facility){const facilities={...view.facilities};delete facilities[facility];return validateViewState({...view,facilities});}
+  return view;
+}
+
+function LimitSlider({label,value,maximum=120,step=5,unit='min',disabled=false,clearLabel,onChange}:{label:string;value?:number;maximum?:number;step?:number;unit?:string;disabled?:boolean;clearLabel:string;onChange:(value:number|undefined)=>void}) {
+  const id=useId(),max=Math.max(maximum,Math.ceil((value??0)/step)*step);
+  return <div className={`limit-slider${disabled?' control-unavailable':''}`}>
+    <div className="slider-heading"><label htmlFor={id}>{label}</label><output htmlFor={id}>{value===undefined?'No limit':`${value} ${unit}`}</output></div>
+    <input id={id} type="range" min="0" max={max} step={step} value={value??max} disabled={disabled} aria-valuetext={value===undefined?'No limit':`${value} ${unit} maximum`} onChange={event=>onChange(Number(event.target.value))} style={{'--range-fill':`${(value??max)/max*100}%`} as CSSProperties}/>
+    <div className="slider-scale"><span>0 {unit}</span><button type="button" aria-label={clearLabel} disabled={disabled||value===undefined} onClick={()=>onChange(undefined)}>No limit</button><span>{max} {unit}</span></div>
+  </div>;
+}
+
+function RentRange({view,onChange}:{view:ViewState;onChange:(view:ViewState)=>void}) {
+  const minId=useId(),maxId=useId();
+  const scale=Math.max(5000,Math.ceil(Math.max(view.minRent??0,view.maxRent??0)/50)*50);
+  const from=view.minRent??0,to=view.maxRent??scale;
+  return <div className="rent-range">
+    <div className="slider-heading"><h3>Monthly rent</h3><span>CHF/month</span></div>
+    <div className="rent-range-values"><label htmlFor={minId}>From <strong>{view.minRent===undefined?'Any':`CHF ${view.minRent.toLocaleString('en-CH')}`}</strong></label><label htmlFor={maxId}>Up to <strong>{view.maxRent===undefined?'No limit':`CHF ${view.maxRent.toLocaleString('en-CH')}`}</strong></label></div>
+    <div className="dual-range" style={{'--range-start':`${from/scale*100}%`,'--range-end':`${to/scale*100}%`} as CSSProperties} onPointerDown={event=>{if((event.target as HTMLElement).tagName==='INPUT')return;const rect=event.currentTarget.getBoundingClientRect();const amount=Math.max(0,Math.min(scale,Math.round((event.clientX-rect.left)/rect.width*scale/50)*50));if(Math.abs(amount-from)<Math.abs(amount-to))onChange({...view,minRent:Math.min(amount,to)});else onChange({...view,maxRent:Math.max(amount,from)});}}>
+      <span className="dual-range-track" aria-hidden="true"/>
+      <input id={minId} aria-label="Minimum rent (CHF/month)" aria-valuemax={to} aria-valuetext={view.minRent===undefined?'No minimum rent':`CHF ${view.minRent} per month minimum`} type="range" min="0" max={scale} step="50" value={from} onChange={event=>onChange({...view,minRent:Math.min(Number(event.target.value),to)})}/>
+      <input id={maxId} aria-label="Maximum rent (CHF/month)" aria-valuemin={from} aria-valuetext={view.maxRent===undefined?'No maximum rent':`CHF ${view.maxRent} per month maximum`} type="range" min="0" max={scale} step="50" value={to} onChange={event=>onChange({...view,maxRent:Math.max(Number(event.target.value),from)})}/>
+    </div>
+    <div className="slider-scale"><span>CHF 0</span><button type="button" disabled={view.minRent===undefined&&view.maxRent===undefined} onClick={()=>onChange({...view,minRent:undefined,maxRent:undefined})}>Clear rent limits</button><span>CHF {scale.toLocaleString('en-CH')}</span></div>
+    <small>Advertised rent. Additional charges are shown separately.</small>
+  </div>;
+}
+
+function PillChoices<T extends string|number>({label,value,options,onChange,disabled=false}:{label:string;value?:T;options:readonly {value:T;label:string}[];onChange:(value:T|undefined)=>void;disabled?:boolean}) {
+  return <div className="filter-choice-group" role="group" aria-label={label}><p className="filter-choice-label">{label}</p><div className="filter-choice-options"><button type="button" aria-pressed={value===undefined} disabled={disabled} onClick={()=>onChange(undefined)}>Any</button>{options.map(option=><button type="button" key={option.value} aria-pressed={value===option.value} disabled={disabled} onClick={()=>onChange(option.value)}>{option.label}</button>)}</div></div>;
 }
 
 export function emptyResultMessage(dataset:Dataset,view:ViewState,busy:boolean):string {
@@ -51,21 +110,82 @@ export function datasetStateMessage(dataset:Dataset):string|undefined {
 }
 
 export function PropertyFilters({view,setView,dataset}: {view:ViewState;setView:(view:ViewState)=>void;dataset:Dataset}) {
-  const [bounds, setBounds] = useState({north:'',south:'',east:'',west:''});
-  const [boundsError, setBoundsError] = useState('');
-  function numeric(key: 'maxRent'|'minBedrooms'|'minRooms'|'minBathrooms'|'minArea'|'maxCommuteMinutes', label:string) {
-    return <Field label={label}><input type="number" min="0" step={key === 'minRooms' ? '0.5':'1'} value={view[key] ?? ''} onChange={e=>setView({...view,[key]:e.target.value === '' ? undefined:Number(e.target.value)})}/></Field>;
+  const [filterError,setFilterError] = useState('');
+  const transit = dataset.definition.mode==='TRANSIT';
+  const successfulRows = dataset.rows.filter(row=>row.state==='SUCCESS');
+  const hasWalking = transit&&successfulRows.some(row=>row.walkingSeconds!==undefined);
+  const hasTransfers = transit&&successfulRows.some(row=>row.transfers!==undefined);
+  const hasTransitTypes = transit&&successfulRows.some(row=>row.transitModes!==undefined);
+  const localities = [...new Set(dataset.listings.flatMap(listing=>listing.locality?[listing.locality]:[]))].sort();
+  function update(next:ViewState) {
+    try {setView(validateViewState(next));setFilterError('');}
+    catch {setFilterError('Keep each minimum below its maximum, within the shown range and increments.');}
   }
-  return <Panel title="Property filters" id="property-filters"><p>These controls filter all loaded search results locally. They do not calculate routes.</p><div className="control-grid">
-    {numeric('maxRent','Maximum rent (source currency / period)')}{numeric('minBedrooms','Minimum bedrooms')}{numeric('minRooms','Minimum rooms (separate from bedrooms)')}{numeric('minBathrooms','Minimum bathrooms')}{numeric('minArea','Minimum floor area (m²)')}{numeric('maxCommuteMinutes','Maximum commute (minutes)')}
-    <Field label="Furnishing"><select value={view.furnishing ?? ''} onChange={e=>setView({...view,furnishing:e.target.value as ViewState['furnishing'] || undefined})}><option value="">Any / not stated</option><option value="FURNISHED">Furnished</option><option value="UNFURNISHED">Unfurnished</option><option value="PARTIAL">Partly furnished</option><option value="UNKNOWN">Not stated</option></select></Field>
-    <Field label="Property type"><select value={view.propertyType ?? ''} onChange={e=>setView({...view,propertyType:e.target.value || undefined})}><option value="">Any type</option>{[...new Set(dataset.listings.map(l=>l.propertyType))].map(type=><option key={type} value={type}>{type}</option>)}</select></Field>
-    {Object.entries(facilityLabels).map(([key,label])=><Field key={key} label={label}><select value={view.facilities?.[key as FacilityKey] ?? ''} onChange={e=>{const facilities = {...view.facilities}; if(e.target.value) facilities[key as FacilityKey] = e.target.value as NonNullable<ViewState['facilities']>[FacilityKey]; else delete facilities[key as FacilityKey]; setView({...view,facilities});}}><option value="">Any / not stated</option><option value="PRIVATE">Private</option><option value="SHARED">Shared</option><option value="ABSENT">Explicitly absent</option><option value="UNKNOWN">Not stated</option><option value="REVIEW">Needs review</option></select></Field>)}
-    <Field label="Sort"><select value={view.sort} onChange={e=>setView({...view,sort:e.target.value as ViewState['sort']})}><option value="COMMUTE_ASC">Shortest commute first</option><option value="COMMUTE_DESC">Longest commute first</option><option value="RENT_ASC">Lowest rent first</option><option value="RENT_DESC">Highest rent first</option></select></Field>
-  </div><label className="check"><input type="checkbox" checked={view.includeUnavailable} onChange={e=>setView({...view,includeUnavailable:e.target.checked})}/> Include rows without an available route</label><p className="muted">A minimum, maximum or facility requirement excludes listings where that fact is unknown. Unknown never means zero or absent.</p>
-  <details><summary>Geographic view filter</summary><p>Enter a coordinate box. This filters the current dataset; it does not change its coverage.</p><div className="control-grid">{(['north','south','east','west'] as const).map(key=><Field key={key} label={key}><input type="number" step="any" min={key==='north'||key==='south'?-90:-180} max={key==='north'||key==='south'?90:180} value={bounds[key]} onChange={e=>setBounds({...bounds,[key]:e.target.value})}/></Field>)}</div><div className="actions"><button onClick={()=>{const b = {north:Number(bounds.north),south:Number(bounds.south),east:Number(bounds.east),west:Number(bounds.west)}; if(Object.values(bounds).some(v=>v==='') || Object.values(b).some(v=>!Number.isFinite(v)) || b.north<=b.south || b.east<=b.west || b.north>90 || b.south< -90 || b.east>180 || b.west< -180) {setBoundsError('Enter a valid box: north above south and east above west.');return;} setBoundsError('');setView({...view,bounds:b});}}>Apply geographic filter</button><button onClick={()=>setView({...view,bounds:undefined})}>Clear geographic filter</button></div>{boundsError && <p role="alert">{boundsError}</p>}{view.bounds && <p>Active box: {JSON.stringify(view.bounds)}</p>}</details>
-  <p className="muted">Rent filters and sorting use the stated amounts. Currencies and weekly or monthly periods are not converted; compare rents with the same currency and period.</p>
-  <button onClick={()=>{setView({sort:'COMMUTE_ASC',includeUnavailable:true,selectedId:view.selectedId});setBounds({north:'',south:'',east:'',west:''});setBoundsError('');}}>Reset property filters</button></Panel>;
+  type NumericKey = 'minBedrooms'|'maxBedrooms'|'minRooms'|'maxRooms'|'minBathrooms'|'maxBathrooms'|'minArea'|'maxArea';
+  function exactRange(title:string,minKey:NumericKey,maxKey:NumericKey,maximum:number,step=1,unit='') {
+    function change(key:NumericKey,value:string) {
+      let number=value===''?undefined:Number(value);
+      const opposite=key===minKey?view[maxKey]:view[minKey];
+      if(number!==undefined&&opposite!==undefined)number=key===minKey?Math.min(number,opposite):Math.max(number,opposite);
+      update({...view,[key]:number});
+    }
+    return <div className="exact-range-row"><h4>{title}</h4><div className="exact-range-inputs">
+      <Field label={'Minimum '+title.toLowerCase()+(unit?' ('+unit+')':'')}><input type="number" min="0" max={maximum} step={step} value={view[minKey]??''} placeholder="Any" onChange={event=>change(minKey,event.target.value)}/></Field>
+      <span aria-hidden="true">to</span>
+      <Field label={'Maximum '+title.toLowerCase()+(unit?' ('+unit+')':'')}><input type="number" min="0" max={maximum} step={step} value={view[maxKey]??''} placeholder="No limit" onChange={event=>change(maxKey,event.target.value)}/></Field>
+    </div></div>;
+  }
+  return <Panel title="Filter homes" id="property-filters" className="compact-filters">
+    <div className="commute-filter-header"><p><strong>{modeLabels[dataset.definition.mode]}</strong> to <strong>{dataset.definition.destination.label}</strong></p><span className="free-filter-note">Filters use no new runs</span></div>
+    <div className="primary-filter-grid">
+      <section id="commute-filters" className="primary-filter-card commute-filters"><h3>Your commute</h3>
+        <LimitSlider label="Maximum commute (minutes)" value={view.maxCommuteMinutes} clearLabel="No commute limit" onChange={value=>update({...view,maxCommuteMinutes:value})}/>
+      </section>
+      <section className="primary-filter-card"><RentRange view={view} onChange={update}/></section>
+      <section className="primary-filter-card bedroom-filter">
+        <PillChoices label="Minimum bedrooms" value={view.minBedrooms} options={[1,2,3,4].map(value=>({value,label:value+'+'}))} onChange={value=>update({...view,minBedrooms:value,maxBedrooms:value!==undefined&&view.maxBedrooms!==undefined&&view.maxBedrooms<value?undefined:view.maxBedrooms})}/>
+        <small>A bedroom is a separate sleeping room. Exact room counts are in More filters.</small>
+      </section>
+    </div>
+    <div className="filter-disclosures">
+      {transit&&<details className="transit-details"><summary>Transit details<span>Walking, transfers and transport types</span></summary>
+        <div className="transit-detail-controls"><LimitSlider label="Maximum walking (minutes)" maximum={60} value={view.maxWalkingMinutes} disabled={!hasWalking} clearLabel="No walking limit" onChange={value=>update({...view,maxWalkingMinutes:value})}/>
+          <PillChoices label="Maximum transfers" value={view.maxTransfers} disabled={!hasTransfers} options={[0,1,2,3,4].map(value=>({value,label:String(value)}))} onChange={value=>update({...view,maxTransfers:value})}/>
+        </div>
+        <fieldset className="transit-type-filters" disabled={!hasTransitTypes}><legend>Allowed transit types in measured journey</legend><div className="transit-type-options">{FILTER_OPTIONS.transitModes.map(option=><label className="check checkbox-pill" key={option.value}><input type="checkbox" checked={view.transitModes===undefined||view.transitModes.includes(option.value)} onChange={event=>{const allowed=view.transitModes??FILTER_OPTIONS.transitModes.map(type=>type.value);const next=event.target.checked?[...allowed,option.value]:allowed.filter(type=>type!==option.value);update({...view,transitModes:next.length===FILTER_OPTIONS.transitModes.length?undefined:next});}}/><span>{option.label}</span></label>)}</div></fieldset>
+        <p className="muted">Uncheck a type to exclude journeys that use it. All transit types used by a measured journey must be allowed. These limits filter the returned journey; they do not find an alternative route. Search preferences remain separate.</p>
+        {(!hasWalking||!hasTransfers||!hasTransitTypes)&&<p className="muted">Controls without measured journey data are unavailable.</p>}
+      </details>}
+      <details className="more-property-filters"><summary>More filters<span>Rooms, home preferences, areas and amenities</span></summary>
+        <div className="advanced-filter-groups">
+          <details className="advanced-filter-group"><summary>Rooms and space</summary><p className="muted">Rooms and bedrooms are separate facts. Leave a field empty for no limit.</p>
+            {exactRange('Rooms','minRooms','maxRooms',FILTER_LIMITS.rooms,.5)}
+            {exactRange('Bedrooms','minBedrooms','maxBedrooms',FILTER_LIMITS.bedrooms)}
+            {exactRange('Bathrooms','minBathrooms','maxBathrooms',FILTER_LIMITS.bathrooms)}
+            {exactRange('Floor area','minArea','maxArea',FILTER_LIMITS.area,1,'m²')}
+          </details>
+          <details className="advanced-filter-group"><summary>Home preferences</summary>
+            <PillChoices label="Furnishing" value={view.furnishing} options={FILTER_OPTIONS.furnishing} onChange={value=>update({...view,furnishing:value})}/>
+            <PillChoices label="Property type" value={view.propertyType} options={FILTER_OPTIONS.propertyTypes} onChange={value=>update({...view,propertyType:value})}/>
+          </details>
+          <details className="advanced-filter-group"><summary>Areas</summary>
+            <PillChoices label="Area" value={view.locality} disabled={!localities.length} options={localities.map(value=>({value,label:value}))} onChange={value=>update({...view,locality:value,bounds:undefined})}/>
+            <p className="muted">Choose a named area here, or draw a filter in the map view.</p>
+            {view.bounds&&<p className="notice">A drawn area is active. <button onClick={()=>update({...view,bounds:undefined})}>Clear geographic filter</button></p>}
+          </details>
+          <details className="advanced-filter-group"><summary>Facilities</summary>
+            <p className="muted">Choose an amenity, then say whether it should be private or shared. Missing information stays “Not stated”.</p>
+            <div className="amenity-rows">{(Object.entries(facilityLabels) as [FacilityKey,string][]).map(([key,label])=><details className="amenity-row" key={key}><summary>{label}<span>{view.facilities?.[key]?facilityValueLabels[view.facilities[key]!]: 'Any'}</span></summary>
+              <PillChoices label={label} value={view.facilities?.[key]} options={FILTER_OPTIONS.facilities} onChange={value=>{const facilities={...view.facilities};if(value)facilities[key]=value;else delete facilities[key];update({...view,facilities});}}/>
+            </details>)}</div>
+          </details>
+        </div>
+        <label className="check availability-filter"><input type="checkbox" checked={view.includeUnavailable} onChange={event=>update({...view,includeUnavailable:event.target.checked})}/> Include rows without an available route</label>
+        <p className="muted">Limits exclude homes with unknown facts. Unknown never means zero or absent.</p>
+      </details>
+    </div>
+    {filterError&&<p role="alert">{filterError}</p>}
+  </Panel>;
 }
 
 function SchematicMap({dataset,items,selectedId,onSelect,onBounds}:{dataset:Dataset;items:ResultItem[];selectedId?:string;onSelect:(id:string)=>void;onBounds:(bounds:ViewState['bounds'])=>void}) {
@@ -82,12 +202,13 @@ function SchematicMap({dataset,items,selectedId,onSelect,onBounds}:{dataset:Data
   function position(point:{lat:number;lng:number}) {return {left:`${5+90*(point.lng-lngMin)/(lngMax-lngMin)}%`,top:`${5+90*(latMax-point.lat)/(latMax-latMin)}%`};}
   function cursor(e:PointerEvent<HTMLDivElement>){const rect=e.currentTarget.getBoundingClientRect();return {x:Math.max(0,Math.min(100,(e.clientX-rect.left)/rect.width*100)),y:Math.max(0,Math.min(100,(e.clientY-rect.top)/rect.height*100))};}
   function finish(){if(!drag)return;const lng=(x:number)=>lngMin+(x-5)/90*(lngMax-lngMin),lat=(y:number)=>latMax-(y-5)/90*(latMax-latMin);if(Math.abs(drag.x-drag.startX)>1&&Math.abs(drag.y-drag.startY)>1)onBounds({north:lat(Math.min(drag.y,drag.startY)),south:lat(Math.max(drag.y,drag.startY)),west:lng(Math.min(drag.x,drag.startX)),east:lng(Math.max(drag.x,drag.startX))});setDrag(null);setDrawing(false);}
-  return <section aria-label="Synthetic coordinate overview"><p>Coordinate schematic of synthetic listings. No basemap, route geometry or commute contours are represented. Approximate origins remain approximate.</p><div className="actions"><button aria-pressed={drawing} onClick={()=>{setDrawing(!drawing);setDrag(null);}}>Draw geographic view filter</button><button onClick={()=>onBounds(undefined)}>Clear geographic filter</button></div><p>{drawing?'Drag a rectangle to filter this dataset. The coordinate fields above provide a keyboard alternative.':'Select a numbered marker to inspect its property.'}</p><div className="map-plot" onPointerDown={e=>{if(!drawing)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);const p=cursor(e);setDrag({startX:p.x,startY:p.y,...p});}} onPointerMove={e=>{if(drag)setDrag({...drag,...cursor(e)});}} onPointerUp={finish} onPointerCancel={()=>setDrag(null)}>{drag&&<span className="map-selection" style={{left:`${Math.min(drag.startX,drag.x)}%`,top:`${Math.min(drag.startY,drag.y)}%`,width:`${Math.abs(drag.x-drag.startX)}%`,height:`${Math.abs(drag.y-drag.startY)}%`}}/>}{destination && <span className="destination-marker" style={position(destination)} title={dataset.definition.destination.label}>Destination</span>}{markers.map(({item,number})=><button key={item.listing.id} className={`map-marker ${item.listing.id===selectedId?'selected':''}`} style={position(item.listing.location.point!)} aria-label={`Select ${item.listing.title}; ${commute(item.route)}; ${item.listing.location.precision.toLowerCase()} location`} aria-pressed={item.listing.id===selectedId} onClick={()=>{if(!drawing)onSelect(item.listing.id);}}>{number}</button>)}</div><p>{items.length-markers.length} results have no map point. All results can be selected below.</p><div className="marker-key">{markers.map(({item,number})=><button key={item.listing.id} aria-pressed={item.listing.id===selectedId} onClick={()=>onSelect(item.listing.id)}>{number}. {item.listing.title}</button>)}</div></section>;
+  return <section aria-label="Synthetic coordinate overview"><p>Coordinate overview of the sample homes. Approximate locations remain approximate.</p><div className="actions"><button aria-pressed={drawing} onClick={()=>{setDrawing(!drawing);setDrag(null);}}>Draw geographic view filter</button><button onClick={()=>onBounds(undefined)}>Clear geographic filter</button></div><p>{drawing?'Drag a rectangle to filter this search. The Area menu in housing filters provides a keyboard alternative.':'Select a numbered marker to inspect its property.'}</p><div className="map-plot" onPointerDown={e=>{if(!drawing)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);const p=cursor(e);setDrag({startX:p.x,startY:p.y,...p});}} onPointerMove={e=>{if(drag)setDrag({...drag,...cursor(e)});}} onPointerUp={finish} onPointerCancel={()=>setDrag(null)}>{drag&&<span className="map-selection" style={{left:`${Math.min(drag.startX,drag.x)}%`,top:`${Math.min(drag.startY,drag.y)}%`,width:`${Math.abs(drag.x-drag.startX)}%`,height:`${Math.abs(drag.y-drag.startY)}%`}}/>}{destination && <span className="destination-marker" style={position(destination)} title={dataset.definition.destination.label}>Destination</span>}{markers.map(({item,number})=><button key={item.listing.id} className={`map-marker ${item.listing.id===selectedId?'selected':''}`} style={position(item.listing.location.point!)} aria-label={`Select ${item.listing.title}; ${commute(item.route)}; ${item.listing.location.precision.toLowerCase()} location`} aria-pressed={item.listing.id===selectedId} onClick={()=>{if(!drawing)onSelect(item.listing.id);}}>{number}</button>)}</div><p>{items.length-markers.length} results have no map point. All results can be selected below.</p><div className="marker-key">{markers.map(({item,number})=><button key={item.listing.id} aria-pressed={item.listing.id===selectedId} onClick={()=>onSelect(item.listing.id)}>{number}. {item.listing.title}</button>)}</div></section>;
 }
 
 export function ResultExplorer({dataset,items,view,setView,imported,busy,onSource,onSave,onEditCommute,saveDisabled=false}:{dataset:Dataset;items:ResultItem[];view:ViewState;setView:(view:ViewState)=>void;imported:boolean;busy:boolean;onSource:(item:ResultItem)=>void;onSave?:()=>void;onEditCommute?:()=>void;saveDisabled?:boolean}) {
   const [presentation,setPresentation] = useState<'list'|'map'>('list');
   const [limit,setLimit] = useState(60);
+  const [mapFilterError,setMapFilterError] = useState('');
   const detailsHeading = useRef<HTMLHeadingElement>(null);
   const selectedCardButton = useRef<HTMLButtonElement>(null);
   const listButton = useRef<HTMLButtonElement>(null);
@@ -96,6 +217,12 @@ export function ResultExplorer({dataset,items,view,setView,imported,busy,onSourc
   const selected = listing && route ? {listing,route} : undefined;
   const activeFilters = activeFilterLabels(view);
   const stateMessage = datasetStateMessage(dataset);
+  const successfulRows=dataset.rows.filter(row=>row.state==='SUCCESS');
+  const hasCompleteWalking=dataset.definition.mode==='TRANSIT'&&successfulRows.length>0&&successfulRows.every(row=>row.walkingSeconds!==undefined);
+  function applyBounds(bounds:ViewState['bounds']) {
+    try {setView(validateViewState({...view,bounds,locality:bounds?undefined:view.locality}));setMapFilterError('');}
+    catch {setMapFilterError('Draw a valid geographic area or choose an area in the housing filters.');}
+  }
   function select(id:string) {
     const position = items.findIndex(item=>item.listing.id===id);
     if(position>=limit) setLimit(Math.ceil((position+1)/60)*60);
@@ -109,14 +236,12 @@ export function ResultExplorer({dataset,items,view,setView,imported,busy,onSourc
   }
   return <Panel title="Search results" id="search-results">
     <div className="result-heading"><p>{imported?'Saved snapshot':dataset.synthetic?'Synthetic results':'Calculated results'} · {dataset.state.toLowerCase()}</p><p>Calculated {dateLabel(dataset.calculatedAt)}. Listing availability may have changed.</p></div>
-    <DefinitionSummary definition={dataset.definition}/>
-    <p>Coverage: {dataset.coverage}. Search contains {dataset.counts.total} property records.</p>
-    <CountsSummary counts={dataset.counts}/>
+    <p className="result-destination">{modeLabels[dataset.definition.mode]} to <strong>{dataset.definition.destination.label}</strong></p>
     {stateMessage && <p className="notice">{stateMessage}</p>}
-    {dataset.counts.noRoute>0 && <p>No journey found means no suitable route was returned for these settings; it does not mean a zero-minute commute.</p>}
     {imported && <p>This snapshot keeps the original calculation and source observation times. Opening it does not check current availability or calculate fresh journeys.</p>}
-    <p>{dataset.attribution.join(' · ')}</p>
-    <p role="status" aria-live="polite">{busy?'Updating local view…':`${items.length} matching results`} · {activeFilters.length?`Active filters: ${activeFilters.join('; ')}`:'No property limits'}</p>
+    <details className="search-details"><summary>Search details</summary><DefinitionSummary definition={dataset.definition}/><p>Coverage: {dataset.coverage}. Search contains {dataset.counts.total} property records.</p><CountsSummary counts={dataset.counts}/>{dataset.counts.noRoute>0&&<p>No journey found means no suitable route was returned for these settings; it does not mean a zero-minute commute.</p>}<p>{dataset.attribution.join(' · ')}</p></details>
+    <div className="results-toolbar"><p role="status" aria-live="polite">{busy?'Updating local view…':`${items.length} matching results`} · {activeFilters.length?`${activeFilters.length} active filters`:'No filters'}</p><Field label="Sort"><select value={view.sort} onChange={event=>setView(validateViewState({...view,sort:event.target.value as ViewState['sort']}))}>{FILTER_OPTIONS.sorts.filter(option=>!option.value.startsWith('WALKING')||hasCompleteWalking).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></Field></div>
+    <div className="active-filter-toolbar">{activeFilters.length>0&&<ul className="active-filter-chips" aria-label="Active filters">{activeFilters.map(label=><li key={label}><button type="button" aria-label={'Remove '+label} onClick={()=>setView(removeActiveFilter(view,label))}>{label}<span aria-hidden="true">×</span></button></li>)}</ul>}<button type="button" className="clear-filters-button" onClick={()=>setView({sort:'COMMUTE_ASC',includeUnavailable:true,selectedId:view.selectedId})}>Clear all filters</button></div>
     <div className="actions" role="group" aria-label="Result presentation">
       <button ref={listButton} aria-pressed={presentation==='list'} onClick={()=>setPresentation('list')}>List</button>
       <button aria-pressed={presentation==='map'} onClick={()=>setPresentation('map')}>Map / coordinates</button>
@@ -124,12 +249,15 @@ export function ResultExplorer({dataset,items,view,setView,imported,busy,onSourc
       {onEditCommute && <button onClick={onEditCommute}>Edit commute</button>}
     </div>
     {!busy&&!items.length && <p>{emptyResultMessage(dataset,view,false)}</p>}
-    {presentation==='map' && <SchematicMap dataset={dataset} items={items} selectedId={view.selectedId} onSelect={select} onBounds={bounds=>setView({...view,bounds})}/>}
+    {mapFilterError&&<p role="alert">{mapFilterError}</p>}
+    {presentation==='map' && <SchematicMap dataset={dataset} items={items} selectedId={view.selectedId} onSelect={select} onBounds={applyBounds}/>}
     <div className="results-layout"><div>
       <ol className="result-list" aria-label="Property results">{items.slice(0,limit).map((item,index)=><li key={item.listing.id} className={`result-card ${view.selectedId===item.listing.id?'selected':''}`} data-motion-key={item.listing.id}>
         <h3><span>{index+1}. </span><button ref={view.selectedId===item.listing.id?selectedCardButton:undefined} className="text-button" onClick={()=>select(item.listing.id)} aria-pressed={view.selectedId===item.listing.id}>{item.listing.title}</button></h3>
-        <p>{commute(item.route)} · {money(item.listing)}</p>
-        <p>{item.listing.rooms ?? 'Not stated'} rooms · {item.listing.bedrooms ?? 'Not stated'} bedrooms · {item.listing.floorArea ?? 'Not stated'} m²</p>
+        <p className="commute-result-summary">{commute(item.route)} · {modeLabels[dataset.definition.mode]}</p>
+        <MeasuredJourney item={item} mode={dataset.definition.mode}/>
+        <p className="result-rent">{money(item.listing)}{item.listing.rent.amount!==null&&<span className="muted"> · advertised rent</span>}</p>
+        <p>{item.listing.rooms===null?'Rooms not stated':`${item.listing.rooms} rooms`} · {item.listing.bedrooms===null?'Bedrooms not stated':`${item.listing.bedrooms} bedrooms`} · {item.listing.floorArea===null?'Floor area not stated':`${item.listing.floorArea} m²`}</p>
         <p>{item.listing.location.label} · {item.listing.location.precision.toLowerCase()} location</p>
         <p>Source: {item.listing.sourceId} · {furnishingLabels[item.listing.furnishing]}</p>
         {item.route.warnings.map((warning,i)=><p key={i} className="muted">{warning}</p>)}
@@ -142,9 +270,11 @@ export function ResultExplorer({dataset,items,view,setView,imported,busy,onSourc
       <h3 tabIndex={-1} ref={detailsHeading}>{selected.listing.title}</h3>
       <button onClick={clearSelection}>Clear selected property</button>
       {!items.some(item=>item.listing.id===selected.listing.id) && <p role="status">This selection is outside your current filters. Clear the filters to show its card and marker again.</p>}
-      <p>{money(selected.listing)}</p>
-      <p>Additional charges: {selected.listing.rent.charges===null?'Not stated':`${selected.listing.rent.currency} ${selected.listing.rent.charges}`}</p>
-      <p>{commute(selected.route)} · calculated {dateLabel(selected.route.calculatedAt)}</p>
+      <p>{money(selected.listing)}{selected.listing.rent.amount!==null&&' · advertised rent'}</p>
+      <p>Additional charges: {selected.listing.rent.charges===null?'Not stated':`CHF ${selected.listing.rent.charges.toLocaleString('en-CH')}/month`}</p>
+      <p className="commute-result-summary">{commute(selected.route)} · {modeLabels[dataset.definition.mode]}</p>
+      <MeasuredJourney item={selected} mode={dataset.definition.mode}/>
+      <p>Calculated {dateLabel(selected.route.calculatedAt)}</p>
       <p>Location precision: {selected.listing.location.precision.toLowerCase()}. {selected.listing.location.precision!=='EXACT'?'The marker does not establish an exact property address.':''}</p>
       <dl className="facts">
         <div><dt>Rooms</dt><dd>{selected.listing.rooms ?? 'Not stated'}</dd></div>
@@ -156,8 +286,13 @@ export function ResultExplorer({dataset,items,view,setView,imported,busy,onSourc
         {selected.route.distanceMeters!==undefined && <div><dt>Measured journey distance</dt><dd>{(selected.route.distanceMeters/1000).toFixed(1)} km</dd></div>}
         {selected.route.walkingSeconds!==undefined && <div><dt>Walking</dt><dd>{Math.ceil(selected.route.walkingSeconds/60)} min</dd></div>}
         {selected.route.transfers!==undefined && <div><dt>Transfers</dt><dd>{selected.route.transfers}</dd></div>}
+        {selected.route.transitModes!==undefined && <div><dt>Transit types in measured journey</dt><dd>{selected.route.transitModes.length?selected.route.transitModes.map(type=>transitLabels[type]).join(', '):'No transit leg'}</dd></div>}
       </dl>
-      {selected.route.walkingSeconds===undefined && selected.route.transfers===undefined && <p>Walking time and transfer count were not measured for this result.</p>}
+      {dataset.definition.mode==='TRANSIT'&&<>
+        {selected.route.walkingSeconds===undefined&&<p>Walking time was not measured for this result.</p>}
+        {selected.route.transfers===undefined&&<p>Transfer count was not measured for this result.</p>}
+        {selected.route.transitModes===undefined&&<p>Transit types were not measured for this result.</p>}
+      </>}
       {selected.route.warnings.map((warning,i)=><p className="muted" key={i}>{warning}</p>)}
       <p>Source last observed: {dateLabel(selected.listing.lastSeenAt)}. Availability is not checked when you open these details.</p>
       <details><summary>Source and attribute evidence</summary><p>Location evidence: {selected.listing.location.provenance}</p><dl className="facts">{Object.entries(selected.listing.evidence).map(([key,value])=><div key={key}><dt>{facilityLabels[key as FacilityKey] ?? key.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')}</dt><dd>{value}</dd></div>)}</dl></details>

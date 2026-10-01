@@ -6,15 +6,16 @@ import type { Session } from './auth';
 import { AccountPanel } from './account';
 import { RunChallenge } from './challenge';
 import { PropertyFilters, ResultExplorer } from './results';
-import { CountsSummary, DefinitionSummary, Field, Panel, dateLabel, modeLabels, preferenceLabels, useReducedMotion } from './ui';
+import { ChoiceGroup, CountsSummary, DefinitionSummary, Field, Panel, dateLabel, modeLabels, preferenceLabels, useReducedMotion } from './ui';
 import { DatasetWorker, type ResultItem } from './worker-client';
 import { PORTABLE_LIMITS } from '../shared/portable';
+import { SEARCH_TIMEZONE, journeyDateInput, parseJourneyDateInput } from './journey-time';
+import { applicableViewForDataset } from '../shared/view';
 
 type Journey = 'popular' | 'custom' | 'saved' | 'suggestion';
 const initialView: ViewState = { sort: 'COMMUTE_ASC', includeUnavailable: true };
 function tomorrowInput() {
-  const date = new Date(); date.setDate(date.getDate() + 1); date.setHours(9, 0, 0, 0);
-  return new Date(date.valueOf() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  return journeyDateInput(Date.now() + 86_400_000).slice(0, 10) + 'T09:00';
 }
 function terminal(run: RunManifest) { return ['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(run.state); }
 function sourceUrl(value: string) {
@@ -27,6 +28,7 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
   const reducedMotion = useReducedMotion();
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [profiles, setProfiles] = useState<PopularProfile[]>([]);
+  const [requestedProfileId, setRequestedProfileId] = useState<string | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementView | null>(null);
   const [journey, setJourney] = useState<Journey>(offlineOnly ? 'saved' : 'popular');
   const [accountOpen, setAccountOpen] = useState(false);
@@ -68,7 +70,7 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
   const token = session.token;
   const signedIn = !!session.uid;
   const activeRun = run && !terminal(run);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = SEARCH_TIMEZONE;
 
   useEffect(() => { worker.current = new DatasetWorker(); return () => worker.current?.dispose(); }, []);
   async function refreshCapabilities() {
@@ -173,12 +175,15 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
   }
   function draftChanged() { setConfirmation(null); setChallengeToken(null); }
   function navigate(next: Journey) { setJourney(next); setAccountOpen(false); setError(''); }
-  async function loadProfile(profile: PopularProfile) {
+  async function loadProfile(profile: PopularProfile, preserveFilters = false) {
+    setRequestedProfileId(profile.id);
     await action('popular', async () => {
       const data = await api<Dataset>('/popular-profiles/' + encodeURIComponent(profile.id), null);
-      setRun(null); setDataset(data); privateOwner.current = null; setImported(false); setView(initialView);
+      setRun(null); setDataset(data); privateOwner.current = null; setImported(false);
+      setView(current => preserveFilters ? applicableViewForDataset(current, data) : initialView);
       setNotice('Popular results loaded. No custom run was used.');
     });
+    setRequestedProfileId(null);
   }
   async function searchDestination() {
     if (!signedIn) { setAccountOpen(true); return; }
@@ -211,8 +216,8 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
     : !selection ? 'Find and confirm the exact destination first.' : '';
   function reviewRun() {
     setError(''); if (!selection || !journeyTime || runBlocked) return;
-    const at = new Date(journeyTime);
-    if (Number.isNaN(at.valueOf())) { setError('Enter a valid journey date and time.'); return; }
+    const at = parseJourneyDateInput(journeyTime, timezone);
+    if (!at) { setError('Choose a valid, unambiguous journey date and time in ' + timezone + '. Avoid the hour when the clocks change.'); return; }
     setConfirmation({ idempotencyKey: crypto.randomUUID(), destinationSelectionId: selection.selectionId, marketId, searchScope: 'STANDARD',
       routeDefinition: { direction: 'HOME_TO_DESTINATION', mode, transitPreference: mode === 'TRANSIT' ? preference : 'DEFAULT', preferredTransitModes: mode === 'TRANSIT' ? preferredModes : [], timeBasis: { kind: timeKind, at: at.toISOString(), timezone } } });
   }
@@ -282,6 +287,15 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
     } catch (failure) { popup?.close(); setError(errorMessage(failure)); }
   }
 
+  const activeProfile = profiles.find(profile => profile.datasetId === dataset?.id)
+    ?? profiles.find(profile => profile.definition.destination.id === dataset?.definition.destination.id && profile.definition.mode === dataset?.definition.mode)
+    ?? profiles[0];
+  const requestedProfile = profiles.find(profile => profile.id === requestedProfileId);
+  const selectedProfile = requestedProfile ?? activeProfile;
+  const savedDestinations = profiles.filter((profile, index) => profiles.findIndex(item => item.destination.id === profile.destination.id) === index);
+  const savedModes = profiles.filter(profile => profile.destination.id === selectedProfile?.destination.id)
+    .filter((profile, index, choices) => choices.findIndex(item => item.definition.mode === profile.definition.mode) === index);
+
   const destinationFinder = <section aria-label="Choose destination"><h3>1. Confirm where you need to arrive</h3>
     <form onSubmit={event => { event.preventDefault(); void searchDestination(); }}><div className="control-grid">
       <Field label="Destination name or address"><input value={query} onChange={event => { setQuery(event.target.value); setSelection(null); setCandidates([]); setSearched(false); draftChanged(); }} placeholder={capabilities?.mode === 'demo' ? 'EPFL, UNIL, Lausanne station' : 'Place name or full address'} minLength={2} maxLength={200} required /></Field>
@@ -321,7 +335,19 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
       {accountOpen && <AccountPanel key={session.uid} session={session} entitlement={entitlement} capabilities={capabilities} busy={!!busy}
         onSignOut={onSignOut} />}
       {journey === 'popular' && <Panel title="Popular destinations" id="popular">
-        <p>These saved commute profiles are ready to filter and use none of your custom-run allowance.</p>
+        <p>Choose a destination and how you travel. These saved results use no runs.</p>
+        {!!profiles.length && <div className="control-grid saved-commute-controls">
+          <Field label="Saved destination"><select disabled={!!busy || !!activeRun} value={selectedProfile?.destination.id ?? ''} onChange={event => {
+            const choices = profiles.filter(profile => profile.destination.id === event.target.value);
+            const next = choices.find(profile => profile.definition.mode === activeProfile?.definition.mode) ?? choices[0];
+            if (next) void loadProfile(next, true);
+          }}>{savedDestinations.map(profile => <option key={profile.destination.id} value={profile.destination.id}>{profile.destination.label}</option>)}</select></Field>
+          <ChoiceGroup label="Travel mode" hint="Prepared results for this destination · no custom run used" disabled={!!busy || !!activeRun} value={selectedProfile?.definition.mode ?? 'TRANSIT'} onChange={value => {
+            const next = profiles.find(profile => profile.destination.id === selectedProfile?.destination.id && profile.definition.mode === value);
+            if (next) void loadProfile(next, true);
+          }} options={savedModes.map(profile=>({value:profile.definition.mode,label:modeLabels[profile.definition.mode]}))}/>
+        </div>}
+        {requestedProfile&&<p role="status">Loading {modeLabels[requestedProfile.definition.mode].toLowerCase()} results for {requestedProfile.destination.label}…</p>}
         <details className="kw-profile-picker" open={!dataset}><summary>Change destination profile</summary><div className="profile-grid">{profiles.map(profile => <article key={profile.id}>
           <h3>{profile.name}</h3><p>{profile.destination.label} · {profile.destination.context}</p>
           <p>{modeLabels[profile.definition.mode]} · {preferenceLabels[profile.definition.transitPreference]}</p>
@@ -331,8 +357,6 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
           <button disabled={!!busy || !!activeRun} onClick={() => void loadProfile(profile)}>Load {profile.name}</button>
         </article>)}</div></details>
         {capabilities && !profiles.length && <p>No popular profiles are available right now. Configure a custom commute or reopen a saved snapshot.</p>}
-        <p>Need another entrance, mode, or journey time? Use a custom commute; a published profile keeps its original settings.</p>
-        <button onClick={() => navigate('custom')}>Set up a custom commute</button><button onClick={() => navigate('saved')}>Open a saved snapshot</button>
         {activeRun && <p>Finish or cancel the active calculation before replacing its results.</p>}
       </Panel>}
       {journey === 'custom' && <Panel title="Custom commute settings" id="custom">
@@ -342,12 +366,12 @@ export function App({ session, onSignOut, onHome, offlineOnly = false, onSignIn,
           {selection && <section aria-label="Commute settings"><h3>2. Choose how and when you travel</h3>
             <div className="control-grid">
               <Field label="Supported market"><select value={marketId} onChange={event => { setMarketId(event.target.value); draftChanged(); }}>{capabilities?.markets.map(market => <option key={market.id} value={market.id}>{market.label}</option>)}</select></Field>
-              <Field label="Travel mode"><select value={mode} onChange={event => { setMode(event.target.value as RouteDefinition['mode']); setTimeKind('DEPARTURE'); setPreference('DEFAULT'); setPreferredModes([]); draftChanged(); }}>{capabilities?.modes.map(value => <option key={value} value={value}>{modeLabels[value]}</option>)}</select></Field>
-              {mode === 'TRANSIT' && <Field label="Transit preference" hint="One preference at a time. This does not guarantee a walking or transfer limit."><select value={preference} onChange={event => { setPreference(event.target.value as RouteDefinition['transitPreference']); draftChanged(); }}>{capabilities?.transitPreferences.map(value => <option key={value} value={value}>{preferenceLabels[value]}</option>)}</select></Field>}
-              <Field label="Journey time basis"><select value={timeKind} onChange={event => { setTimeKind(event.target.value as 'DEPARTURE' | 'ARRIVAL'); draftChanged(); }}>{capabilities?.timeKinds.filter(kind => kind !== 'ARRIVAL' || mode === 'TRANSIT').map(kind => <option key={kind} value={kind}>{kind === 'ARRIVAL' ? 'Arrive by' : 'Depart at'}</option>)}</select></Field>
+              <ChoiceGroup label="Travel mode" value={mode} options={(capabilities?.modes??[]).map(value=>({value,label:modeLabels[value]}))} onChange={value => { setMode(value); setTimeKind('DEPARTURE'); setPreference('DEFAULT'); setPreferredModes([]); draftChanged(); }}/>
+              {mode === 'TRANSIT' && <ChoiceGroup label="Transit preference" hint="A route preference; walking and transfer limits are set in the result filters." value={preference} options={(capabilities?.transitPreferences??[]).map(value=>({value,label:preferenceLabels[value]}))} onChange={value=>{setPreference(value);draftChanged();}}/>}
+              <ChoiceGroup label="Journey time basis" value={timeKind} options={(capabilities?.timeKinds??[]).filter(kind=>kind!=='ARRIVAL'||mode==='TRANSIT').map(value=>({value,label:value==='ARRIVAL'?'Arrive by':'Depart at'}))} onChange={value=>{setTimeKind(value);draftChanged();}}/>
               <Field label={'Journey date and time (' + timezone + ')'}><input type="datetime-local" value={journeyTime} onChange={event => { setJourneyTime(event.target.value); draftChanged(); }} required /></Field>
             </div>
-            {mode === 'TRANSIT' && !!capabilities?.preferredTransitModes.length && <fieldset><legend>Preferred transit modes (other modes may still be returned)</legend>{capabilities.preferredTransitModes.map(value => <label className="check" key={value}><input type="checkbox" checked={preferredModes.includes(value)} onChange={event => { setPreferredModes(event.target.checked ? [...preferredModes, value] : preferredModes.filter(current => current !== value)); draftChanged(); }} />{value.toLowerCase().replace('_', ' ')}</label>)}</fieldset>}
+            {mode === 'TRANSIT' && !!capabilities?.preferredTransitModes.length && <details><summary>Preferred transit types</summary><fieldset className="transit-type-filters"><legend>Preferred transit modes (other modes may still be returned)</legend><div className="transit-type-options">{capabilities.preferredTransitModes.map(value => <label className="check" key={value}><input type="checkbox" checked={preferredModes.includes(value)} onChange={event => { setPreferredModes(event.target.checked ? [...preferredModes, value] : preferredModes.filter(current => current !== value)); draftChanged(); }} />{{BUS:'Bus',SUBWAY:'Metro',TRAIN:'Train',LIGHT_RAIL:'Light rail',RAIL:'Rail'}[value]}</label>)}</div></fieldset></details>}
             <p>Home to destination. A return journey is a separate calculation.</p>
             <p>Standard coverage: {capabilities?.markets.find(market => market.id === marketId)?.coverage ?? 'No supported market is configured'}. Rent, bedrooms, furnishing, and map filters do not narrow this calculation.</p>
             {dataset && <p>These are draft settings. The results below still show their original destination, transport settings, and time.</p>}

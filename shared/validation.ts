@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type {CreateRunRequest, RouteDefinition} from './contracts.ts';
+import { facilitySchema, furnishingSchema, housingValueSchemas, localitySchema, propertyTypeSchema, transitModeSchema } from './search-filters.ts';
 export const safeText = z.string().max(2000).refine(s=>!/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(s),'Text must not contain markup or control characters');
 export const safeIdentifier=safeText.min(1).max(200).refine(s=>!/[\\/]/.test(s)&&s!=='.'&&s!=='..','Identifiers must be a single path segment');
 export const isoTime = z.string().datetime({offset:true});
@@ -9,14 +10,13 @@ export function isPublicHostname(host:string){return host===host.toLowerCase()&&
 export const safeUrl = z.string().url().max(2048).refine(s=>{try{const u=new URL(s);return u.protocol==='https:'&&!u.username&&!u.password&&!u.hash&&!/[<>\s\\]/.test(s)&&isPublicHostname(u.hostname)}catch{return false}},'Only public HTTPS URLs with DNS hostnames are allowed');
 const locationShape={point:pointSchema.optional(),label:safeText,precision:z.enum(['EXACT','BUILDING','STREET','LOCALITY','UNRESOLVED']),provenance:safeText};
 export const destinationSchema=z.object({...locationShape,id:safeText.min(1),country:z.string().length(2),locality:safeText,context:safeText}).strict();
-const numberOrUnknown=z.number().finite().min(0).max(1e9).nullable();
-const facility=z.enum(['PRIVATE','SHARED','ABSENT','UNKNOWN','REVIEW']);
+const facility=facilitySchema;
 export const listingSchema=z.object({
   id:safeIdentifier,sourceId:safeIdentifier,sourceListingId:safeIdentifier,version:safeIdentifier,marketId:safeIdentifier,sourceUrl:safeUrl,title:safeText,
-  location:z.object(locationShape).strict(),active:z.boolean(),status:z.enum(['ROUTABLE','APPROXIMATE','UNRESOLVED','INACTIVE']),
-  rent:z.object({amount:numberOrUnknown,currency:z.string().regex(/^[A-Z]{3}$/),period:z.enum(['MONTH','WEEK']),charges:numberOrUnknown}).strict(),
-  propertyType:safeText,floorArea:numberOrUnknown,rooms:numberOrUnknown,bedrooms:numberOrUnknown,bathrooms:numberOrUnknown,
-  furnishing:z.enum(['FURNISHED','UNFURNISHED','PARTIAL','UNKNOWN']),
+  location:z.object(locationShape).strict(),locality:localitySchema.optional(),active:z.boolean(),status:z.enum(['ROUTABLE','APPROXIMATE','UNRESOLVED','INACTIVE']),
+  rent:z.object({amount:housingValueSchemas.rent.nullable(),currency:z.literal('CHF'),period:z.literal('MONTH'),charges:housingValueSchemas.rent.nullable()}).strict(),
+  propertyType:propertyTypeSchema,floorArea:housingValueSchemas.area.nullable(),rooms:housingValueSchemas.rooms.nullable(),bedrooms:housingValueSchemas.bedrooms.nullable(),bathrooms:housingValueSchemas.bathrooms.nullable(),
+  furnishing:furnishingSchema,
   facilities:z.object({washingMachine:facility,dryer:facility,kitchen:facility,dishwasher:facility,airConditioning:facility,balcony:facility,parking:facility}).strict(),
   evidence:z.record(z.string().max(100),safeText),extractionVersion:safeText,firstSeenAt:isoTime,lastSeenAt:isoTime,sourceUpdatedAt:isoTime.nullable(),ingestedAt:isoTime
 }).strict().superRefine((l,ctx)=>{
@@ -25,7 +25,7 @@ export const listingSchema=z.object({
   if(l.status!==expected)ctx.addIssue({code:'custom',path:['status'],message:'Listing status must match activity, location precision and coordinates.'});
   if(l.location.precision==='UNRESOLVED'&&l.location.point)ctx.addIssue({code:'custom',path:['location'],message:'Unresolved locations must not claim coordinates.'});
 });
-export const commuteSettingsSchema=z.object({direction:z.literal('HOME_TO_DESTINATION'),mode:z.enum(['WALK','BICYCLE','DRIVE','TRANSIT']),transitPreference:z.enum(['DEFAULT','LESS_WALKING','FEWER_TRANSFERS']),preferredTransitModes:z.array(z.enum(['BUS','SUBWAY','TRAIN','LIGHT_RAIL','RAIL'])).max(5),timeBasis:z.object({kind:z.enum(['DEPARTURE','ARRIVAL']),at:isoTime,timezone:z.string().min(1).max(80).refine(s=>{try{new Intl.DateTimeFormat('en',{timeZone:s});return true}catch{return false}},'Unknown timezone')}).strict()}).strict();
+export const commuteSettingsSchema=z.object({direction:z.literal('HOME_TO_DESTINATION'),mode:z.enum(['WALK','BICYCLE','DRIVE','TRANSIT']),transitPreference:z.enum(['DEFAULT','LESS_WALKING','FEWER_TRANSFERS']),preferredTransitModes:z.array(transitModeSchema).max(5),timeBasis:z.object({kind:z.enum(['DEPARTURE','ARRIVAL']),at:isoTime,timezone:z.string().min(1).max(80).refine(s=>{try{new Intl.DateTimeFormat('en',{timeZone:s});return true}catch{return false}},'Unknown timezone')}).strict()}).strict();
 export const routeDefinitionSchema=commuteSettingsSchema.extend({destination:destinationSchema,provider:z.enum(['synthetic','google']),adapterVersion:safeText.min(1)}).strict();
 export const createRunSchema=z.object({idempotencyKey:z.string().regex(/^[a-zA-Z0-9_-]{8,100}$/),destinationSelectionId:z.string().min(1).max(200),marketId:z.string().min(1).max(100),searchScope:z.literal('STANDARD'),routeDefinition:commuteSettingsSchema,verificationChallenge:z.string().max(2048).optional()}).strict();
 export function assertSupportedDefinition(d:RouteDefinition){

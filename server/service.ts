@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import type {AccountSupportRequest,AccountView,Actor,Capabilities,Counts,CreateRunRequest,Dataset,DemoSignInResult,Destination,Entitlement,EntitlementView,ListingProvider,ListingVersion,LocationResolver,PopularProfile,RouteDefinition,RouteProvider,RouteRow,RunManifest,Source,Suggestion} from '../shared/contracts.ts';
-import { demoDestinations, demoListings, demoMarkets, demoSources } from '../shared/fixtures.ts';
+import { DEMO_FIXTURE_VERSION, demoDestinations, demoListings, demoMarkets, demoPopularPlans, demoSources } from '../shared/fixtures.ts';
 import { demoAccounts } from '../shared/demo-accounts.ts';
 import { validateCreateRun, assertSupportedDefinition, commuteSettingsSchema, safeIdentifier, safeText } from '../shared/validation.ts';
 import { ApiError, check } from './errors.ts';
@@ -71,7 +71,7 @@ export class CommuteService {
   }
   async initialise(publish=true) {
     if (this.mode!=='demo') return;
-    await this.repo.transaction(async tx=>{
+    const fixturesChanged=await this.repo.transaction(async tx=>{
       for (const uid of ['alice','bob','admin','exhausted','destination-limit','suspended']) {
         if (!(await tx.get('identities',uid))) {
           const id=`demo-${uid}`;
@@ -86,18 +86,35 @@ export class CommuteService {
           tx.put('usage',id,{id,reservations:Object.fromEntries(Array.from({length:count},(_,index)=>[`fixture-${uid}-${index}`,{destinationKey:destinationKey(demoDestinations[index]),destinationId:demoDestinations[index].id,status:'FINALISED'}]))} satisfies Usage);
         }
       }
-      if (!(await tx.get('config','seeded'))) {
-        for (const listing of demoListings) {tx.put('listings',listing.id,listing);tx.put('listingVersions',versionKey(listing),listing);}
-        for (const source of demoSources) tx.put('sources',source.id,source);
-        tx.put('config','seeded',{id:'seeded',at:this.iso()});
+      const seeded=await tx.get<{id:string;at:string;fixtureVersion?:string}>('config','seeded');
+      if(seeded?.fixtureVersion===DEMO_FIXTURE_VERSION)return false;
+      // Upgrade only our known synthetic inventory. Frozen custom-run versions, allowances,
+      // source controls, user publication settings and unpublication records are retained.
+      for(const source of demoSources)if(!(await tx.get('sources',source.id)))tx.put('sources',source.id,source);
+      for(const listing of demoListings){
+        const current=await tx.get<ListingVersion>('listings',listing.id);
+        if(!current||(current.sourceId===listing.sourceId&&current.sourceListingId===listing.sourceListingId)){
+          tx.put('listings',listing.id,listing);tx.put('listingVersions',versionKey(listing),listing);
+        }
       }
+      tx.put('config','seeded',{id:'seeded',at:seeded?.at??this.iso(),fixtureVersion:DEMO_FIXTURE_VERSION});return true;
     });
     if (publish) {
       const profiles=await this.repo.query<PopularProfile>('popularProfiles');
       const expired=await Promise.all(profiles.map(async p=>{const d=await this.repo.get<PublishedDataset>('popularDatasets',p.datasetId);return !d?.expiresAt||Date.parse(d.expiresAt)<=this.now().getTime();}));
       const unpublished=new Set((await this.repo.query<{id:string}>('demoUnpublishedProfiles')).map(profile=>profile.id));
-      const missingCampusProfile=['epfl-east-transit','epfl-west-transit'].some(id=>!profiles.some(profile=>profile.id===id)&&!unpublished.has(id));
-      if(!profiles.length||expired.some(Boolean)||missingCampusProfile)await this.maintainPopular();
+      const missingCampusProfile=demoPopularPlans.some(plan=>!profiles.some(profile=>profile.id===plan.id)&&!unpublished.has(plan.id));
+      const outdatedCampusProfile=profiles.some(profile=>demoPopularPlans.some(plan=>plan.id===profile.id)&&profile.definition.adapterVersion!==this.options.route.version);
+      if(!profiles.length||expired.some(Boolean)||missingCampusProfile||outdatedCampusProfile||fixturesChanged){
+        // Existing operator controls must not prevent the API from starting: staff
+        // need access to restore service, and valid published snapshots stay readable.
+        // Manual maintenance still reports these gates instead of silently bypassing them.
+        const stop=await this.repo.get<Switch>('config','kill-switch');
+        const sources=await this.repo.query<Source>('sources');
+        const allowedSources=new Set(sources.filter(source=>source.enabled&&source.synthetic&&source.permissions.retrieval&&source.permissions.storage).map(source=>source.id));
+        const available=(await this.repo.query<ListingVersion>('listings')).some(listing=>listing.active&&listing.status!=='INACTIVE'&&listing.marketId===demoMarkets[0].id&&allowedSources.has(listing.sourceId));
+        if(!stop?.enabled&&available)await this.maintainPopular();
+      }
     }
   }
   async capabilities():Promise<Capabilities> {
@@ -399,7 +416,7 @@ export class CommuteService {
   async popularProfiles() {
     const profiles=await this.repo.query<PopularProfile>('popularProfiles');
     if(this.mode!=='demo')return profiles;
-    const order=['epfl-east-transit','epfl-west-transit','unil-dorigny-transit'];
+    const order=['epfl-east-transit','epfl-west-transit','unil-dorigny-transit',...demoPopularPlans.filter(plan=>plan.definition.mode!=='TRANSIT').map(plan=>plan.id)];
     const rank=(id:string)=>{const index=order.indexOf(id);return index<0?order.length:index;};
     return profiles.sort((a,b)=>rank(a.id)-rank(b.id)||a.id.localeCompare(b.id));
   }
@@ -420,9 +437,7 @@ export class CommuteService {
     check(this.mode==='demo'||(this.policyActive()&&this.options.livePolicy!.allowPopular&&this.options.livePolicy!.popularApprovalReference),503,'POPULAR_GATED','Live maintained datasets require explicit precomputation and retention rights.');
     const stop=await this.repo.get<Switch>('config','kill-switch');check(!stop?.enabled,503,'SPENDING_STOPPED','Popular maintenance is paused by the spending stop.');
     const sources=await this.repo.query<Source>('sources'),allowedSources=new Set(sources.filter(s=>s.enabled&&s.permissions.storage&&s.permissions.retrieval&&s.synthetic===(this.mode==='demo')).map(s=>s.id));
-    const defaultPlans=this.mode==='demo'?demoDestinations.filter(destination=>['epfl-east','epfl-west','unil-dorigny'].includes(destination.id)).map(destination=>({id:`${destination.id}-transit`,name:`${destination.label} · public transport`,marketId:demoMarkets[0].id,refreshPolicy:'Synthetic fixture snapshot; manual or scheduled maintenance. Fixed Tuesday 6 October 2026, 08:30 arrival.',definition:{destination,direction:'HOME_TO_DESTINATION',mode:'TRANSIT',transitPreference:'DEFAULT',preferredTransitModes:[],
-        timeBasis:{kind:'ARRIVAL',at:'2026-10-06T08:30:00+02:00',timezone:'Europe/Zurich'},provider:'synthetic',adapterVersion:this.options.route.version}
-      } as PopularPlan)) : this.options.livePolicy!.popularPlans;
+    const defaultPlans=this.mode==='demo'?demoPopularPlans : this.options.livePolicy!.popularPlans;
     const savedPlans=this.mode==='demo'?await this.repo.query<PopularPlan>('demoPopularPlans'):[];
     const unpublished=this.mode==='demo'?new Set((await this.repo.query<{id:string}>('demoUnpublishedProfiles')).map(profile=>profile.id)):new Set<string>();
     const plans=requestedPlans??[...new Map([...defaultPlans,...savedPlans].map(plan=>[plan.id,plan])).values()].filter(plan=>!unpublished.has(plan.id));

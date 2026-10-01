@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { csrfHeaders, customerPassword, staffPassword, signIn } from './browser-auth';
+import { csrfHeaders, customerPassword, staffPassword, setRange, signIn } from './browser-auth';
 
 for (const account of [
   { name: 'customer', route: '/sign-in', endpoint: '/api/v1/auth/login', email: 'alice@keywise.test', password: customerPassword, button: 'Sign in', destination: '/dashboard' },
@@ -54,7 +54,7 @@ test('visitor imports, filters and saves a snapshot when the application API is 
   await page.getByLabel('Open a saved search snapshot', { exact: true }).setInputFiles(snapshot!);
   await expect(page.locator('.result-card')).toHaveCount(24);
   await expect(page.locator('#search-results').getByText('Saved snapshot · complete', { exact: true })).toBeVisible();
-  await page.getByLabel('Maximum rent (source currency / period)', { exact: true }).fill('900');
+  await setRange(page, 'Maximum rent (CHF/month)', 900);
   await expect(page.locator('.result-card')).toHaveCount(4);
   await expect(page.getByRole('button', { name: 'Save results snapshot', exact: true })).toBeEnabled();
   await expect(page.getByLabel('Recover your temporary run by ID')).toHaveCount(0);

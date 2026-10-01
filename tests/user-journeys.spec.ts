@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { allowance, chooseDestination, customerPassword, navigation, signIn, signOut } from './browser-auth';
+import { allowance, chooseDestination, customerPassword, navigation, setRange, signIn, signOut } from './browser-auth';
 
 function countRunStarts(page: Page) {
   const starts: string[] = [];
@@ -89,7 +89,7 @@ test('exhausted user explores popular profiles and snapshots without new runs',a
   expect(before.remainingRuns).toBe(0);
   await navigation(page).getByRole('button',{name:'Popular destinations',exact:true}).click();
   await expect(page.locator('.result-card')).toHaveCount(24);
-  await page.getByLabel('Maximum rent (source currency / period)',{exact:true}).fill('900');
+  await setRange(page, 'Maximum rent (CHF/month)', 900);
   await expect(page.locator('.result-card')).toHaveCount(4);
   await navigation(page).getByRole('button',{name:'Open / save snapshot',exact:true}).click();
   const downloaded = page.waitForEvent('download');
@@ -142,7 +142,7 @@ test('destination-limited account can review its existing entrance and blocks a 
   await expect(page.locator('#account').getByText(/another profile for a destination already used today/)).toBeVisible();
   await navigation(page).getByRole('button',{name:'Custom commute',exact:true}).click();
   await chooseDestination(page,'EPFL',/Confirm this destination: EPFL.*east/);
-  await page.getByLabel('Travel mode',{exact:true}).selectOption('WALK');
+  await page.locator('#custom').getByRole('group', { name: 'Travel mode', exact: true }).getByRole('radio', { name: 'Walking', exact: true }).check();
   await expect(page.getByRole('button',{name:'Review custom run',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Review custom run',exact:true}).click();
   await expect(page.getByRole('region',{name:'Confirm custom run'}).getByText(/for a destination already used today/)).toBeVisible();

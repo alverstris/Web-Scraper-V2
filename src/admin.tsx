@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AccountSupportRequest, Capabilities, Entitlement, PopularProfile, RouteDefinition, RunManifest, Source, Suggestion } from '../shared/contracts';
 import { api, errorMessage } from './api';
 import { CountsSummary, DefinitionSummary, Field, Panel, dateLabel, modeLabels, preferenceLabels } from './ui';
+import { SEARCH_TIMEZONE, journeyDateInput, parseJourneyDateInput } from './journey-time';
 
 type AdminRun = Pick<RunManifest, 'id'|'state'|'counts'|'createdAt'|'externalRequests'|'externalElements'>;
 interface SourceHealth {id: string; complete: boolean; observedAt: string; recordCount?: number; error?: string}
@@ -13,8 +14,7 @@ interface AdminState {
 }
 
 function dateInput(value: string) {
-  const date = new Date(value);
-  return new Date(date.valueOf()-date.getTimezoneOffset()*60_000).toISOString().slice(0,16);
+  return journeyDateInput(value);
 }
 
 export function AdminConsole({token,onChanged}: {token: string | null;onChanged?:()=>Promise<void>}) {
@@ -40,7 +40,7 @@ export function AdminConsole({token,onChanged}: {token: string | null;onChanged?
   const [timeKind,setTimeKind] = useState<'DEPARTURE'|'ARRIVAL'>('ARRIVAL');
   const [journeyTime,setJourneyTime] = useState(()=>dateInput(new Date(Date.now()+86_400_000).toISOString()));
   const [refreshPolicy,setRefreshPolicy] = useState('Operator-maintained synthetic profile; refresh explicitly after review.');
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = SEARCH_TIMEZONE;
 
   async function load() {
     return Promise.all([api<AdminState>('/admin',token),api<PopularProfile[]>('/popular-destinations',token),api<Capabilities>('/capabilities',token)]);
@@ -94,8 +94,8 @@ export function AdminConsole({token,onChanged}: {token: string | null;onChanged?
   const chosenProfile = publicationTarget.startsWith('profile:')?profiles.find(item=>item.id===publicationTarget.slice(8)):undefined;
   const chosenSuggestion = publicationTarget.startsWith('suggestion:')?data?.suggestions.find(item=>item.id===publicationTarget.slice(11)&&item.status==='APPROVED'):undefined;
   const publicationDestination = chosenProfile?.destination??chosenSuggestion?.destination;
-  const publicationTime = new Date(journeyTime);
-  const publicationDefinition: RouteDefinition|null = publicationDestination&&!Number.isNaN(publicationTime.valueOf())?{
+  const publicationTime = parseJourneyDateInput(journeyTime, timezone);
+  const publicationDefinition: RouteDefinition|null = publicationDestination&&publicationTime?{
     destination:publicationDestination,direction:'HOME_TO_DESTINATION' as const,mode,
     transitPreference:mode==='TRANSIT'?preference:'DEFAULT' as const,preferredTransitModes:mode==='TRANSIT'?preferredModes:[],
     timeBasis:{kind:timeKind,at:publicationTime.toISOString(),timezone},provider:'synthetic',adapterVersion:'assigned by server',

@@ -77,3 +77,45 @@ This can be ready for functional local acceptance and prepared for integration. 
 - Firebase custom claims: https://firebase.google.com/docs/auth/admin/custom-claims
 - Firebase session cookies: https://firebase.google.com/docs/auth/admin/manage-cookies
 - Firebase Auth Emulator: https://firebase.google.com/docs/emulator-suite/connect_auth
+
+## Rental filtering research and applied rules — 1 October 2026
+
+This follow-up concerns the customer frontend and the local flow demonstration. The latest user instruction refines the original brief's generic price/period contract: the current Swiss market compares monthly CHF rent only. Customers filter immutable records; they cannot edit currencies, billing periods, property facts, route durations or calculation assumptions.
+
+Primary-source observations:
+
+- [Naef's rental listing](https://www.naef.ch/location/appartement/2000/rue-de-grise-pierre-9-neuchatel/219712.2002/) distinguishes monthly gross rent, monthly rent excluding charges, and charges. Its [rental results](https://www.naef.ch/louer/appartements/) emphasize rent, room counts, floor area and controlled sorting.
+- [Homegate's rental search](https://www.homegate.ch/rent/real-estate-search) gives location, maximum price and minimum rooms priority, with further criteria under More Filters.
+- [Rightmove's rental-filter guide](https://faq.rightmove.co.uk/support/solutions/articles/7000100591-how-to-use-the-search-filters-to-find-properties-to-rent) separates basic price/bedroom/type criteria from detailed bathrooms and amenity choices.
+- [ImmoScout24's travel-time guide](https://www.immoscout24.ch/c/en/guide/features/apartment-search-travel-time) pairs destination, travel mode and maximum minutes; a geographic distance is not a substitute for journey time.
+- [Zoopla's travel-time instructions](https://help.zoopla.co.uk/hc/en-gb/articles/360006033618-How-do-I-create-a-Travel-time-search) make maximum travel time and transport type explicit before refining housing criteria.
+
+Applied product decisions are inferences from those interfaces and the user's instruction, rather than requirements imposed by the source sites:
+
+| Brief requirement | Demo frontend and data rule |
+| --- | --- |
+| Maximum calculated commute | Prominent minute slider with a readable value and explicit no-limit choice; filters stored durations across the loaded universe without another route request. |
+| Walk/cycle/drive/public transport | Prepared profiles for each supported mode and destination; switching loads a coherent stored dataset rather than relabelling old times. |
+| Less walking/fewer transfers/transit types | Simulated fixtures explicitly provide walking minutes, transfer counts and actual transit types. Result limits filter those recorded journeys. Live matrix results without those fields cannot offer the controls. Route preferences remain separately labelled soft preferences. |
+| Rent | CHF per month in filters, cards, details and simulated source pages. Additional monthly charges stay separate and unknown stays unknown. Unsupported currencies/periods fail normalization/import instead of being compared as raw numbers. |
+| Rooms and bedrooms | Separate bounded ranges and quick bedroom choices; half-room increments and whole bedroom counts. |
+| Bathrooms and floor area | Whole bathroom counts and m², bounded consistently in ingestion, snapshots and local filters. |
+| Furnishing and property type | Fixed named options, with partial/unknown states and readable type labels. |
+| Seven facilities | Washing machine, dryer, kitchen, dishwasher, air conditioning, balcony, parking; private/shared/absent/unknown/review remain distinct. |
+| Geography | Explicit named areas and map drawing; customer forms no longer expose raw coordinate editing or JSON. |
+| Sorting | Shortest/longest commute, lowest/highest monthly rent; walking sorting only with sufficient recorded measures. |
+| Time assumptions | Swiss-market inputs and journey summaries use Europe/Zurich. Invalid, skipped or ambiguous daylight-saving times cannot silently alter a custom run. |
+| Fixed data and free exploration | Validated view state changes visibility/sort/selection only. Original listing versions, complete export universe, ownership and allowances remain unchanged. |
+
+The demonstration retains unknown facts and unavailable-route states because they are part of the intended user flow. It does not infer zero-minute journeys or nonexistent amenities, and does not claim that filtering a returned journey discovers every possible compliant alternative.
+
+## Filter interaction research — 1 October 2026
+
+The user's follow-up preserves the complete filter coverage but asks for simpler interaction. The first implementation exposed too many separate dropdowns at once. The revised frontend uses progressive disclosure and controls suited to each kind of choice.
+
+- [Zillow's search guide](https://zillow.zendesk.com/hc/en-us/articles/203523760-How-do-I-search-for-homes-) groups the principal price, beds/baths and home-type choices, with other requirements under More. Sorting belongs alongside the results.
+- [Rightmove's rental guide](https://faq.rightmove.co.uk/support/solutions/articles/7000100591-how-to-use-the-search-filters-to-find-properties-to-rent) distinguishes initial price/bedroom/type criteria from advanced amenity choices. This supports revealing detail when needed instead of presenting every field at once.
+- [ImmoScout24's commute search](https://www.immoscout24.ch/c/en/guide/features/apartment-search-travel-time) starts with destination, mode and maximum minutes. Keywise therefore makes the commute limit a primary control rather than an advanced property fact.
+- [W3C's slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/) specifies accessible labels, readable values and arrow/Home/End keyboard interaction. Its [multi-thumb pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/) describes dependent price endpoints, stable keyboard order and limits that prevent crossing. Native inputs are used where possible; production assistive-technology testing remains separate from the local browser smoke checks.
+
+Applied design decisions: a compact commute bar, one monthly-rent range, quick bedroom choices and visible transport-mode buttons; expandable transit details and grouped housing requirements; selectable categorical chips and amenity states; constrained exact-value controls for less common numeric requirements; removable active filters and a clear-all action. The data remains CHF/month, m² and minutes, with immutable stored journeys. A changed interaction does not weaken normalization or introduce editable property facts.
