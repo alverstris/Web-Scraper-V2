@@ -20,7 +20,7 @@ export default defineConfig({
   webServer: {
     command: 'node scripts/dev.mjs',
     url: 'http://127.0.0.1:5173/api/v1/capabilities',
-    timeout: 90_000,
+    timeout: 120_000,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     env: { APP_MODE: 'demo', DATA_DIR: resolve('.data',`e2e-${Date.now()}`), DEMO_DATA_DIR: resolve('.data',`e2e-${Date.now()}`) },
   },

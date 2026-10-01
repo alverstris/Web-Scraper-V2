@@ -13,9 +13,19 @@ npx pnpm@10.32.1 install --frozen-lockfile
 npm run dev
 ```
 
+In Windows PowerShell, use the `.cmd` wrapper if `npm` or `npx` reports that running scripts is disabled. No execution-policy change is needed:
+
+```powershell
+npm.cmd --version
+npm.cmd exec --yes --package=pnpm@10.32.1 -- pnpm install --frozen-lockfile
+npm.cmd run dev
+```
+
 Open http://127.0.0.1:5173 in a browser on that same machine. The website uses React/Vite and proxies `/api` to its local Node API on port 8787. Keep the terminal running; Ctrl+C stops both services. Running this command in a remote/cloud workspace does not make its loopback address accessible from your own computer.
 
 No API keys or `.env` file are required for the default local demo. Startup creates the fictional listings, saved EPFL profiles and mock accounts automatically. Optional local settings can be copied from `.env.example`; preserve an existing `.env` file. The combined command accepts demo mode only and binds to loopback. `pnpm dev` and `corepack pnpm dev` run the same script when those tools are installed.
+
+The launcher waits up to 90 seconds for initial API preparation, printing progress while it waits. If startup fails, it reports the checked address and last failure. See [startup troubleshooting](docs/keywise-local-demo.md#startup-troubleshooting) for running the API and website in separate terminals.
 
 Use the website's customer sign-in at `/sign-in` and the mock email/password accounts in [the Keywise local guide](docs/keywise-local-demo.md). Sign-in opens `/dashboard` with a saved EPFL east dataset ready to filter. Staff use the discreet public footer link to `/staff/sign-in`; ordinary customer accounts are denied staff access. There is no customer-facing test-identity selector or implicit Alice login.
 

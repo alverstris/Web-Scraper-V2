@@ -11,9 +11,35 @@ npx pnpm@10.32.1 install --frozen-lockfile
 npm run dev
 ```
 
+For Windows PowerShell, these commands avoid the blocked `npm.ps1`/`npx.ps1` wrappers without changing the execution policy:
+
+```powershell
+npm.cmd --version
+npm.cmd exec --yes --package=pnpm@10.32.1 -- pnpm install --frozen-lockfile
+npm.cmd run dev
+```
+
 Open `http://127.0.0.1:5173/` in a browser on that same computer. The API listens on `127.0.0.1:8787`; Vite proxies its API requests. Ctrl+C stops both processes. No API keys or `.env` file are required for the default local demo. Optional settings can be copied from `.env.example`; preserve an existing `.env`, keep `APP_MODE=demo` and the default loopback host. Mock credentials and cookie sessions are for this loopback development environment.
 
 The validation server ran inside the cloud workspace using `.data/keywise-interactive-20261001` to preserve prior development state. Its loopback address is not a hosted preview accessible from your computer. That ignored directory is not included in the repository; starting your updated local checkout prepares its own saved fixtures automatically.
+
+## Startup troubleshooting
+
+The combined launcher prepares saved data before starting Vite. Its default API readiness timeout is 90 seconds; it prints progress every ten seconds and includes the health endpoint and last failure if preparation times out. `DEV_STARTUP_TIMEOUT_MS` optionally adjusts this wait between 1,000 and 300,000 milliseconds.
+
+To inspect an API startup failure, stop the combined launcher with Ctrl+C and run this in the project folder:
+
+```powershell
+node --import tsx server/main.ts
+```
+
+When it prints `{"event":"api_listening","mode":"demo","host":"127.0.0.1","port":8787}`, leave that terminal open. In a **second terminal**, in the same project folder, start the website:
+
+```powershell
+npm.cmd run dev:web
+```
+
+On macOS/Linux, use `npm run dev:web`. Open `http://127.0.0.1:5173/` after Vite reports that it is ready. Both terminals must remain open; Ctrl+C stops each service. Stop both before switching back to the combined command so the ports are available. If the API exits or reports an error, preserve its complete output to diagnose the failure; do not delete saved data as a startup workaround.
 
 ## Mock sign-in accounts
 

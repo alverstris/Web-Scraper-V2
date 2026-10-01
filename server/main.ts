@@ -1,5 +1,6 @@
 import { createRuntime } from './runtime.ts';
 import { createApiServer } from './http.ts';
+if ((process.env.APP_MODE ?? 'demo') === 'demo') console.log('Preparing local Keywise accounts, listings and saved EPFL profiles…');
 const runtime=await createRuntime();
 const host=process.env.HOST??(runtime.mode==='demo'?'127.0.0.1':'0.0.0.0');
 if(runtime.mode==='demo'&&!['127.0.0.1','::1','localhost'].includes(host))throw new Error('Demo identities may only bind to loopback.');
